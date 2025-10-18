@@ -1427,6 +1427,32 @@ fun SeasonSection(
     onEpisodeClick: (Episode) -> Unit
 ) {
     var expanded by remember { mutableStateOf(season.seasonNumber == 1) }
+    val repository = com.movielocal.client.data.repository.MovieRepository()
+    var episodeProgress by remember { mutableStateOf<Map<String, VideoProgress>>(emptyMap()) }
+    var lastWatchedEpisodeId by remember { mutableStateOf<String?>(null) }
+    
+    LaunchedEffect(season.seasonNumber) {
+        val progressMap = mutableMapOf<String, VideoProgress>()
+        var latestTimestamp = 0L
+        var latestEpisodeId: String? = null
+        
+        season.episodes.forEach { episode ->
+            try {
+                val progress = repository.getProgress(episode.id).getOrNull()
+                if (progress != null) {
+                    progressMap[episode.id] = progress
+                    if (progress.timestamp > latestTimestamp) {
+                        latestTimestamp = progress.timestamp
+                        latestEpisodeId = episode.id
+                    }
+                }
+            } catch (e: Exception) {
+            }
+        }
+        
+        episodeProgress = progressMap
+        lastWatchedEpisodeId = latestEpisodeId
+    }
     
     Column(
         modifier = Modifier
@@ -1471,9 +1497,15 @@ fun SeasonSection(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 season.episodes.forEach { episode ->
+                    val progress = episodeProgress[episode.id]
+                    val isLastWatched = episode.id == lastWatchedEpisodeId
+                    
                     EpisodeCard(
                         episode = episode,
-                        onClick = { onEpisodeClick(episode) }
+                        onClick = { onEpisodeClick(episode) },
+                        isCompleted = progress?.completed == true,
+                        isLastWatched = isLastWatched,
+                        watchProgress = progress
                     )
                 }
             }
@@ -1487,107 +1519,167 @@ fun SeasonSection(
 fun EpisodeCard(
     episode: Episode,
     onClick: () -> Unit,
-    isCompleted: Boolean = false
+    isCompleted: Boolean = false,
+    isLastWatched: Boolean = false,
+    watchProgress: VideoProgress? = null
 ) {
+    val borderColor = when {
+        isLastWatched -> Color(0xFFFFB800)
+        else -> Color.Transparent
+    }
+    
+    val backgroundColor = when {
+        isLastWatched -> MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+        else -> MaterialTheme.colorScheme.surface
+    }
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            containerColor = backgroundColor
+        ),
+        border = if (isLastWatched) {
+            androidx.compose.foundation.BorderStroke(2.dp, borderColor)
+        } else null
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Box {
-                AsyncImage(
-                    model = episode.thumbnailUrl,
-                    contentDescription = episode.title,
-                    modifier = Modifier
-                        .width(120.dp)
-                        .height(90.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                
-                if (isCompleted) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .size(24.dp)
-                            .background(Color(0xFF4CAF50), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = "Assistido",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-            
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(12.dp)
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Episode ${episode.episodeNumber}",
-                            fontSize = 12.sp,
-                            color = iNoxBlue,
-                            fontWeight = FontWeight.Bold
-                        )
-                        
-                        if (isCompleted) {
-                            Text(
-                                text = "✓",
-                                fontSize = 14.sp,
-                                color = Color(0xFF4CAF50),
-                                fontWeight = FontWeight.Bold
+                Box {
+                    AsyncImage(
+                        model = episode.thumbnailUrl,
+                        contentDescription = episode.title,
+                        modifier = Modifier
+                            .width(120.dp)
+                            .height(90.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    
+                    if (isCompleted) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .size(24.dp)
+                                .background(Color(0xFF4CAF50), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Assistido",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
                     
-                    Text(
-                        text = "${episode.duration}min",
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
+                    if (watchProgress != null && !isCompleted) {
+                        val progressPercent = ((watchProgress.position.toFloat() / watchProgress.duration.toFloat()) * 100).toInt()
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .background(Color.Gray.copy(alpha = 0.3f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(progressPercent / 100f)
+                                    .background(iNoxBlue)
+                            )
+                        }
+                    }
                 }
                 
-                Spacer(Modifier.height(4.dp))
-                
-                Text(
-                    text = episode.title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                
-                Spacer(Modifier.height(4.dp))
-                
-                Text(
-                    text = episode.description,
-                    fontSize = 13.sp,
-                    color = Color.Gray,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Episode ${episode.episodeNumber}",
+                                fontSize = 12.sp,
+                                color = if (isLastWatched) Color(0xFFFFB800) else iNoxBlue,
+                                fontWeight = FontWeight.Bold
+                            )
+                            
+                            if (isCompleted) {
+                                Text(
+                                    text = "✓",
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF4CAF50),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            
+                            if (isLastWatched && !isCompleted) {
+                                Icon(
+                                    Icons.Default.PlayArrow,
+                                    contentDescription = "Continuar",
+                                    tint = Color(0xFFFFB800),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        
+                        Text(
+                            text = "${episode.duration}min",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    
+                    Spacer(Modifier.height(4.dp))
+                    
+                    Text(
+                        text = episode.title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    
+                    Spacer(Modifier.height(4.dp))
+                    
+                    Text(
+                        text = episode.description,
+                        fontSize = 13.sp,
+                        color = Color.Gray,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            
+            if (isLastWatched && !isCompleted) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFFFB800).copy(alpha = 0.1f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Último episódio assistido - Continuar assistindo",
+                        fontSize = 11.sp,
+                        color = Color(0xFFFFB800),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

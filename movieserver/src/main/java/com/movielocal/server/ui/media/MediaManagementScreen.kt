@@ -13,12 +13,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -548,27 +550,58 @@ fun SeasonCard(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddSeasonDialog(
     onDismiss: () -> Unit,
     onSave: (SeasonData) -> Unit,
     nextSeasonNumber: Int
 ) {
+    var seasonNumber by remember { mutableStateOf(nextSeasonNumber.toString()) }
+    
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Adicionar Temporada $nextSeasonNumber") },
+        title = { Text("Adicionar Temporada") },
         text = {
-            Text("Uma nova temporada será criada. Você poderá adicionar episódios em seguida.")
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Escolha o número da temporada que deseja criar:")
+                
+                OutlinedTextField(
+                    value = seasonNumber,
+                    onValueChange = { 
+                        if (it.isEmpty() || it.toIntOrNull() != null) {
+                            seasonNumber = it
+                        }
+                    },
+                    label = { Text("Número da Temporada") },
+                    placeholder = { Text("Ex: 1, 2, 3...") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                Text(
+                    "Após criar a temporada, você poderá adicionar episódios.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val newSeason = SeasonData(
-                        seasonNumber = nextSeasonNumber,
-                        episodes = emptyList()
-                    )
-                    onSave(newSeason)
-                }
+                    val number = seasonNumber.toIntOrNull()
+                    if (number != null && number > 0) {
+                        val newSeason = SeasonData(
+                            seasonNumber = number,
+                            episodes = emptyList()
+                        )
+                        onSave(newSeason)
+                    }
+                },
+                enabled = seasonNumber.toIntOrNull()?.let { it > 0 } == true
             ) {
                 Text("Criar")
             }
