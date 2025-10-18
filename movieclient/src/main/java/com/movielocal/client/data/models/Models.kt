@@ -124,5 +124,8 @@ data class VideoProgress(
     val duration: Long,
     
     @SerializedName("timestamp")
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    
+    @SerializedName("completed")
+    val completed: Boolean = false
 )

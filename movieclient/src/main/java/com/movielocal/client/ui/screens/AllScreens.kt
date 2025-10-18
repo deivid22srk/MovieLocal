@@ -375,7 +375,8 @@ fun ContentRow(
 @Composable
 fun MovieCard(
     movie: Movie,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isCompleted: Boolean = false
 ) {
     Card(
         modifier = Modifier
@@ -387,12 +388,32 @@ fun MovieCard(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        AsyncImage(
-            model = movie.thumbnailUrl,
-            contentDescription = movie.title,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = movie.thumbnailUrl,
+                contentDescription = movie.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            
+            if (isCompleted) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(28.dp)
+                        .background(Color(0xFF4CAF50), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Assistido",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -428,7 +449,8 @@ fun SeriesRow(
 @Composable
 fun SeriesCard(
     series: Series,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    hasWatchedEpisodes: Boolean = false
 ) {
     Card(
         modifier = Modifier
@@ -440,12 +462,32 @@ fun SeriesCard(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        AsyncImage(
-            model = series.thumbnailUrl,
-            contentDescription = series.title,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = series.thumbnailUrl,
+                contentDescription = series.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            
+            if (hasWatchedEpisodes) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(28.dp)
+                        .background(Color(0xFF2196F3), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PlayCircle,
+                        contentDescription = "Em Progresso",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1143,8 +1185,23 @@ fun DetailScreen(
     movie: Movie?,
     series: Series?,
     onPlayMovie: (String, String, String) -> Unit,
+    onPlaySeries: (Series, Int, Int) -> Unit,
     onBack: () -> Unit
 ) {
+    var isCompleted by remember { mutableStateOf(false) }
+    val repository = com.movielocal.client.data.repository.MovieRepository()
+    
+    LaunchedEffect(movie?.id ?: series?.id) {
+        val id = movie?.id ?: series?.id
+        if (id != null) {
+            try {
+                val progress = repository.getProgress(id).getOrNull()
+                isCompleted = progress?.completed == true
+            } catch (e: Exception) {
+            }
+        }
+    }
+    
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1201,12 +1258,44 @@ fun DetailScreen(
             ) {
                 Spacer(Modifier.height(16.dp))
                 
-                Text(
-                    text = movie?.title ?: series?.title ?: "",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = movie?.title ?: series?.title ?: "",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    
+                    if (isCompleted) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF4CAF50)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "Assistido",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    "Assistido",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
                 
                 Spacer(Modifier.height(12.dp))
                 
@@ -1316,9 +1405,10 @@ fun DetailScreen(
         series?.seasons?.forEach { season ->
             item {
                 SeasonSection(
+                    series = series,
                     season = season,
                     onEpisodeClick = { episode ->
-                        onPlayMovie(episode.videoUrl, episode.id, episode.title)
+                        onPlaySeries(series, season.seasonNumber, episode.episodeNumber)
                     }
                 )
             }
@@ -1332,6 +1422,7 @@ fun DetailScreen(
 
 @Composable
 fun SeasonSection(
+    series: Series,
     season: Season,
     onEpisodeClick: (Episode) -> Unit
 ) {
@@ -1395,7 +1486,8 @@ fun SeasonSection(
 @Composable
 fun EpisodeCard(
     episode: Episode,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isCompleted: Boolean = false
 ) {
     Card(
         modifier = Modifier
@@ -1409,15 +1501,35 @@ fun EpisodeCard(
         Row(
             modifier = Modifier.fillMaxWidth()
         ) {
-            AsyncImage(
-                model = episode.thumbnailUrl,
-                contentDescription = episode.title,
-                modifier = Modifier
-                    .width(120.dp)
-                    .height(90.dp)
-                    .clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop
-            )
+            Box {
+                AsyncImage(
+                    model = episode.thumbnailUrl,
+                    contentDescription = episode.title,
+                    modifier = Modifier
+                        .width(120.dp)
+                        .height(90.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                
+                if (isCompleted) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(24.dp)
+                            .background(Color(0xFF4CAF50), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = "Assistido",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
             
             Column(
                 modifier = Modifier
@@ -1428,12 +1540,26 @@ fun EpisodeCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "Episode ${episode.episodeNumber}",
-                        fontSize = 12.sp,
-                        color = iNoxBlue,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Episode ${episode.episodeNumber}",
+                            fontSize = 12.sp,
+                            color = iNoxBlue,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        if (isCompleted) {
+                            Text(
+                                text = "✓",
+                                fontSize = 14.sp,
+                                color = Color(0xFF4CAF50),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                     
                     Text(
                         text = "${episode.duration}min",

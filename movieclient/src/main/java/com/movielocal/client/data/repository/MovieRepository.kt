@@ -67,4 +67,61 @@ class MovieRepository {
             Result.failure(e)
         }
     }
+    
+    suspend fun markCompleted(videoId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = api?.markCompleted(videoId)
+            if (response?.isSuccessful == true) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to mark as completed"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun registerClient(clientId: String, deviceName: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val data = mapOf("clientId" to clientId, "deviceName" to deviceName)
+            val response = api?.registerClient(data)
+            if (response?.isSuccessful == true) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to register client"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun sendHeartbeat(clientId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = api?.sendHeartbeat(clientId)
+            if (response?.isSuccessful == true) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to send heartbeat"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun updateWatching(clientId: String, videoTitle: String?, position: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val data = mapOf<String, Any>(
+                "videoTitle" to (videoTitle ?: ""),
+                "position" to position
+            )
+            val response = api?.updateWatching(clientId, data)
+            if (response?.isSuccessful == true) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to update watching"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

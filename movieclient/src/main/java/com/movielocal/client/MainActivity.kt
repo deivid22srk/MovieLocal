@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.gson.Gson
 import com.movielocal.client.ui.player.PlayerActivity
 import com.movielocal.client.ui.screens.HomeScreen
 import com.movielocal.client.ui.screens.SearchScreen
@@ -21,6 +22,9 @@ import com.movielocal.client.ui.theme.MovieLocalTheme
 import com.movielocal.client.ui.viewmodel.MovieViewModel
 
 class MainActivity : ComponentActivity() {
+    
+    private val gson = Gson()
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
@@ -37,6 +41,22 @@ class MainActivity : ComponentActivity() {
                                 putExtra("VIDEO_ID", videoId)
                                 putExtra("VIDEO_TITLE", videoTitle)
                             })
+                        },
+                        onPlaySeries = { series, season, episode ->
+                            val seasonData = series.seasons.find { it.seasonNumber == season }
+                            val episodeData = seasonData?.episodes?.find { it.episodeNumber == episode }
+                            
+                            if (episodeData != null) {
+                                startActivity(Intent(this, PlayerActivity::class.java).apply {
+                                    putExtra("VIDEO_URL", episodeData.videoUrl)
+                                    putExtra("VIDEO_ID", episodeData.id)
+                                    putExtra("VIDEO_TITLE", "${series.title} - S${season}E${episode}: ${episodeData.title}")
+                                    putExtra("IS_SERIES", true)
+                                    putExtra("SERIES_DATA", gson.toJson(series))
+                                    putExtra("CURRENT_SEASON", season)
+                                    putExtra("CURRENT_EPISODE", episode)
+                                })
+                            }
                         }
                     )
                 }
@@ -48,7 +68,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MovieApp(
     viewModel: MovieViewModel = viewModel(),
-    onPlayMovie: (String, String, String) -> Unit
+    onPlayMovie: (String, String, String) -> Unit,
+    onPlaySeries: (com.movielocal.client.data.models.Series, Int, Int) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
@@ -156,6 +177,9 @@ fun MovieApp(
                     movie = selectedMovie,
                     series = selectedSeries,
                     onPlayMovie = onPlayMovie,
+                    onPlaySeries = onPlaySeries,
+                    onBack = { currentScreen = "home" }
+                )
                     onBack = { currentScreen = "home" }
                 )
             }

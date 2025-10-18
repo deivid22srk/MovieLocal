@@ -7,6 +7,7 @@ import com.movielocal.client.data.api.ServerDiscovery
 import com.movielocal.client.data.models.Movie
 import com.movielocal.client.data.models.Series
 import com.movielocal.client.data.repository.MovieRepository
+import com.movielocal.client.data.ClientManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +31,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     
     private val repository = MovieRepository()
     private val serverDiscovery = ServerDiscovery(application)
+    private val clientManager = ClientManager(application, repository)
     private val prefs = application.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
     
     private val _uiState = MutableStateFlow<UiState>(UiState.Initial)
@@ -62,6 +64,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
             )
             
             if (result.isSuccess) {
+                clientManager.register()
                 loadContent()
             }
         }
@@ -117,5 +120,10 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     
     fun clearDiscoveredServer() {
         _connectionState.value = _connectionState.value.copy(discoveredServerIp = null)
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        clientManager.stopHeartbeat()
     }
 }

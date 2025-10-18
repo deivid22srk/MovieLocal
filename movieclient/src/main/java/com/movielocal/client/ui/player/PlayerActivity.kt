@@ -13,7 +13,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -34,8 +37,11 @@ import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout
 import com.google.android.exoplayer2.ui.StyledPlayerView
 import com.movielocal.client.data.models.VideoProgress
+import com.movielocal.client.data.models.Series
+import com.movielocal.client.data.models.Episode
 import com.movielocal.client.data.repository.MovieRepository
 import com.movielocal.client.ui.theme.MovieLocalTheme
+import com.google.gson.Gson
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -43,10 +49,15 @@ class PlayerActivity : ComponentActivity() {
     
     private var player: ExoPlayer? = null
     private val repository = MovieRepository()
+    private val gson = Gson()
     private var videoId: String = ""
     private var videoTitle: String = ""
     private var progressJob: kotlinx.coroutines.Job? = null
     private var isInPipMode = false
+    private var isSeries: Boolean = false
+    private var seriesData: Series? = null
+    private var currentSeason: Int = 1
+    private var currentEpisode: Int = 1
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +79,14 @@ class PlayerActivity : ComponentActivity() {
         val videoUrl = intent.getStringExtra("VIDEO_URL") ?: ""
         videoId = intent.getStringExtra("VIDEO_ID") ?: ""
         videoTitle = intent.getStringExtra("VIDEO_TITLE") ?: ""
+        isSeries = intent.getBooleanExtra("IS_SERIES", false)
+        
+        if (isSeries) {
+            val seriesJson = intent.getStringExtra("SERIES_DATA")
+            seriesData = seriesJson?.let { gson.fromJson(it, Series::class.java) }
+            currentSeason = intent.getIntExtra("CURRENT_SEASON", 1)
+            currentEpisode = intent.getIntExtra("CURRENT_EPISODE", 1)
+        }
         
         val serverUrl = getSharedPreferences("app_prefs", MODE_PRIVATE)
             .getString("server_url", "") ?: ""
@@ -86,6 +105,10 @@ class PlayerActivity : ComponentActivity() {
                         videoUrl = videoUrl,
                         videoId = videoId,
                         videoTitle = videoTitle,
+                        isSeries = isSeries,
+                        series = seriesData,
+                        currentSeason = currentSeason,
+                        currentEpisode = currentEpisode,
                         repository = repository,
                         onBackPressed = { 
                             saveCurrentProgress()
@@ -97,6 +120,9 @@ class PlayerActivity : ComponentActivity() {
                         },
                         onEnterPip = {
                             enterPipMode()
+                        },
+                        onEpisodeChange = { season, episode ->
+                            changeEpisode(season, episode)
                         }
                     )
                 }
@@ -111,6 +137,28 @@ class PlayerActivity : ComponentActivity() {
                 .setAspectRatio(rational)
                 .build()
             enterPictureInPictureMode(params)
+        }
+    }
+    
+    private fun changeEpisode(season: Int, episode: Int) {
+        seriesData?.let { series ->
+            val seasonData = series.seasons.find { it.seasonNumber == season }
+            val episodeData = seasonData?.episodes?.find { it.episodeNumber == episode }
+            
+            if (episodeData != null) {
+                saveCurrentProgress()
+                
+                videoId = episodeData.id
+                videoTitle = "${series.title} - S${season}E${episode}: ${episodeData.title}"
+                currentSeason = season
+                currentEpisode = episode
+                
+                player?.let { p ->
+                    p.setMediaItem(MediaItem.fromUri(episodeData.videoUrl))
+                    p.prepare()
+                    p.play()
+                }
+            }
         }
     }
     
@@ -136,12 +184,20 @@ class PlayerActivity : ComponentActivity() {
             if (p.duration > 0 && p.currentPosition > 0 && videoId.isNotEmpty()) {
                 lifecycleScope.launch {
                     try {
+                        val percentage = (p.currentPosition.toFloat() / p.duration.toFloat()) * 100
+                        val isCompleted = percentage >= 95f
+                        
                         val progress = VideoProgress(
                             videoId = videoId,
                             position = p.currentPosition,
-                            duration = p.duration
+                            duration = p.duration,
+                            completed = isCompleted
                         )
                         repository.saveProgress(videoId, progress)
+                        
+                        if (isCompleted) {
+                            repository.markCompleted(videoId)
+                        }
                     } catch (e: Exception) {
                         // Silent fail
                     }
@@ -171,14 +227,20 @@ fun VideoPlayerScreen(
     videoUrl: String,
     videoId: String,
     videoTitle: String,
+    isSeries: Boolean,
+    series: Series?,
+    currentSeason: Int,
+    currentEpisode: Int,
     repository: MovieRepository,
     onBackPressed: () -> Unit,
     onPlayerReady: (ExoPlayer) -> Unit,
-    onEnterPip: () -> Unit
+    onEnterPip: () -> Unit,
+    onEpisodeChange: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
     var showControls by remember { mutableStateOf(true) }
     var showResumeDialog by remember { mutableStateOf(false) }
+    var showEpisodeDrawer by remember { mutableStateOf(false) }
     var savedProgress by remember { mutableStateOf<VideoProgress?>(null) }
     var playerInitialized by remember { mutableStateOf(false) }
     var aspectRatioMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
@@ -286,6 +348,16 @@ fun VideoPlayerScreen(
                     }
                 },
                 actions = {
+                    if (isSeries && series != null) {
+                        IconButton(onClick = { showEpisodeDrawer = true }) {
+                            Icon(
+                                imageVector = Icons.Default.List,
+                                contentDescription = "Episódios",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                    
                     IconButton(onClick = { showAspectRatioMenu = !showAspectRatioMenu }) {
                         Icon(
                             imageVector = Icons.Default.AspectRatio,
@@ -329,6 +401,19 @@ fun VideoPlayerScreen(
                 player = exoPlayer,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
+            
+            if (showEpisodeDrawer && isSeries && series != null) {
+                EpisodeDrawer(
+                    series = series,
+                    currentSeason = currentSeason,
+                    currentEpisode = currentEpisode,
+                    onEpisodeSelected = { season, episode ->
+                        onEpisodeChange(season, episode)
+                        showEpisodeDrawer = false
+                    },
+                    onDismiss = { showEpisodeDrawer = false }
+                )
+            }
         }
     }
 }
@@ -575,4 +660,183 @@ fun ResumeDialog(
             }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EpisodeDrawer(
+    series: Series,
+    currentSeason: Int,
+    currentEpisode: Int,
+    onEpisodeSelected: (season: Int, episode: Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxHeight(0.8f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = series.title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+            )
+            
+            Text(
+                text = "Escolha um episódio",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Gray,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            
+            Divider(color = Color.Gray.copy(alpha = 0.3f))
+            
+            Spacer(Modifier.height(8.dp))
+            
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                series.seasons.forEach { season ->
+                    item {
+                        Text(
+                            text = "Temporada ${season.seasonNumber}",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        )
+                    }
+                    
+                    items(season.episodes) { episode ->
+                        val isCurrent = season.seasonNumber == currentSeason && 
+                                       episode.episodeNumber == currentEpisode
+                        
+                        EpisodeItem(
+                            episode = episode,
+                            seasonNumber = season.seasonNumber,
+                            isCurrent = isCurrent,
+                            onClick = {
+                                onEpisodeSelected(season.seasonNumber, episode.episodeNumber)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EpisodeItem(
+    episode: Episode,
+    seasonNumber: Int,
+    isCurrent: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isCurrent) 
+                MaterialTheme.colorScheme.primaryContainer 
+            else 
+                MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(68.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Gray)
+            ) {
+                coil.compose.AsyncImage(
+                    model = episode.thumbnailUrl,
+                    contentDescription = episode.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+                
+                if (isCurrent) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(32.dp)
+                            .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = "Reproduzindo",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(24.dp)
+                        )
+                    }
+                }
+            }
+            
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Episódio ${episode.episodeNumber}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isCurrent) 
+                            MaterialTheme.colorScheme.primary 
+                        else 
+                            Color.Gray,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    
+                    Text(
+                        text = "${episode.duration}min",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                }
+                
+                Spacer(Modifier.height(4.dp))
+                
+                Text(
+                    text = episode.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                
+                Spacer(Modifier.height(4.dp))
+                
+                Text(
+                    text = episode.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
 }

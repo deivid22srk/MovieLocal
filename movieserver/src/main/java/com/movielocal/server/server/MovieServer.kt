@@ -8,6 +8,7 @@ import com.movielocal.server.data.MediaDatabase
 import com.movielocal.server.data.MediaType
 import com.movielocal.server.data.ProgressDatabase
 import com.movielocal.server.data.VideoProgress
+import com.movielocal.server.data.ConnectedClientsManager
 import com.movielocal.server.models.ContentResponse
 import com.movielocal.server.models.Episode
 import com.movielocal.server.models.Movie
@@ -26,6 +27,7 @@ class MovieServer(
     private val gson = Gson()
     private val database = MediaDatabase(context)
     private val progressDatabase = ProgressDatabase(context)
+    private val clientsManager = ConnectedClientsManager(context)
     private val moviesDir: File
     private val seriesDir: File
     private var serverIp: String = ""
@@ -96,6 +98,20 @@ class MovieServer(
             uri.startsWith("/api/thumbnail/") -> serveThumbnail(uri.removePrefix("/api/thumbnail/"))
             uri == "/api/health" -> serveHealth()
             uri == "/api/debug/permissions" -> serveDebugPermissions()
+            uri == "/api/clients" && method == Method.GET -> getClients()
+            uri == "/api/clients/register" && method == Method.POST -> registerClient(session)
+            uri.startsWith("/api/clients/") && uri.endsWith("/heartbeat") && method == Method.POST -> {
+                val clientId = uri.removePrefix("/api/clients/").removeSuffix("/heartbeat")
+                updateHeartbeat(clientId)
+            }
+            uri.startsWith("/api/clients/") && uri.endsWith("/watching") && method == Method.POST -> {
+                val clientId = uri.removePrefix("/api/clients/").removeSuffix("/watching")
+                updateWatching(session, clientId)
+            }
+            uri.startsWith("/api/progress/") && uri.endsWith("/completed") && method == Method.POST -> {
+                val videoId = uri.removePrefix("/api/progress/").removeSuffix("/completed")
+                markCompleted(videoId)
+            }
             uri.startsWith("/api/progress/") && method == Method.GET -> {
                 val videoId = uri.removePrefix("/api/progress/")
                 getProgress(videoId)
@@ -435,7 +451,8 @@ class MovieServer(
                 videoId = decodedVideoId,
                 position = progressData.position,
                 duration = progressData.duration,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                completed = progressData.completed
             )
             
             progressDatabase.saveProgress(progress)
@@ -455,6 +472,115 @@ class MovieServer(
             ).apply {
                 addHeader("Access-Control-Allow-Origin", "*")
             }
+        }
+    }
+    
+    private fun getClients(): Response {
+        val clients = clientsManager.getConnectedClients()
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            gson.toJson(mapOf("clients" to clients))
+        )
+    }
+    
+    private fun registerClient(session: IHTTPSession): Response {
+        return try {
+            val bodyMap = mutableMapOf<String, String>()
+            session.parseBody(bodyMap)
+            val body = bodyMap["postData"] ?: ""
+            
+            val data = gson.fromJson(body, Map::class.java) as Map<String, Any>
+            val clientId = data["clientId"] as? String ?: return newFixedLengthResponse(
+                Response.Status.BAD_REQUEST,
+                "application/json",
+                gson.toJson(mapOf("error" to "clientId is required"))
+            )
+            
+            val deviceName = data["deviceName"] as? String ?: "Unknown Device"
+            val ipAddress = session.remoteIpAddress ?: "unknown"
+            
+            clientsManager.registerClient(clientId, deviceName, ipAddress)
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "registered", "clientId" to clientId))
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
+    }
+    
+    private fun updateHeartbeat(clientId: String): Response {
+        clientsManager.updateClientHeartbeat(clientId)
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            gson.toJson(mapOf("status" to "ok"))
+        )
+    }
+    
+    private fun updateWatching(session: IHTTPSession, clientId: String): Response {
+        return try {
+            val bodyMap = mutableMapOf<String, String>()
+            session.parseBody(bodyMap)
+            val body = bodyMap["postData"] ?: ""
+            
+            val data = gson.fromJson(body, Map::class.java) as Map<String, Any>
+            val videoTitle = data["videoTitle"] as? String
+            val position = (data["position"] as? Number)?.toLong() ?: 0L
+            
+            clientsManager.updateClientWatching(clientId, videoTitle, position)
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "updated"))
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
+    }
+    
+    private fun markCompleted(videoId: String): Response {
+        return try {
+            val decodedVideoId = java.net.URLDecoder.decode(videoId, "UTF-8")
+            
+            val existingProgress = progressDatabase.getProgress(decodedVideoId)
+            val progress = if (existingProgress != null) {
+                existingProgress.copy(completed = true, timestamp = System.currentTimeMillis())
+            } else {
+                VideoProgress(
+                    videoId = decodedVideoId,
+                    position = 0,
+                    duration = 0,
+                    timestamp = System.currentTimeMillis(),
+                    completed = true
+                )
+            }
+            
+            progressDatabase.saveProgress(progress)
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "completed"))
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
         }
     }
 }

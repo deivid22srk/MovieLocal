@@ -8,7 +8,8 @@ data class VideoProgress(
     val videoId: String,
     val position: Long,
     val duration: Long,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val completed: Boolean = false
 )
 
 class ProgressDatabase(private val context: Context) {

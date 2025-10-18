@@ -25,4 +25,19 @@ interface MovieApi {
         @Path("videoId") videoId: String,
         @Body progress: VideoProgress
     ): Response<Map<String, String>>
+    
+    @POST("/api/progress/{videoId}/completed")
+    suspend fun markCompleted(@Path("videoId") videoId: String): Response<Map<String, String>>
+    
+    @POST("/api/clients/register")
+    suspend fun registerClient(@Body data: Map<String, String>): Response<Map<String, String>>
+    
+    @POST("/api/clients/{clientId}/heartbeat")
+    suspend fun sendHeartbeat(@Path("clientId") clientId: String): Response<Map<String, String>>
+    
+    @POST("/api/clients/{clientId}/watching")
+    suspend fun updateWatching(
+        @Path("clientId") clientId: String,
+        @Body data: Map<String, Any>
+    ): Response<Map<String, String>>
 }

@@ -30,11 +30,14 @@ import com.movielocal.server.server.MovieServerService
 import com.movielocal.server.ui.theme.MovieLocalTheme
 import com.movielocal.server.ui.media.MediaManagementScreen
 import com.movielocal.server.ui.settings.SettingsScreen
+import com.movielocal.server.ui.clients.ConnectedClientsScreen
+import com.movielocal.server.data.ConnectedClientsManager
 
 class MainActivity : ComponentActivity() {
 
     private var serverService: MovieServerService? = null
     private var isBound = false
+    private lateinit var clientsManager: ConnectedClientsManager
     
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -60,6 +63,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        clientsManager = ConnectedClientsManager(this)
+        
         requestPermissions()
         bindServerService()
         
@@ -78,12 +83,17 @@ class MainActivity : ComponentActivity() {
                             isServerRunning = { serverService?.isServerRunning ?: false },
                             getServerUrl = { getServerUrl() },
                             onNavigateToMedia = { currentScreen = "media" },
-                            onNavigateToSettings = { currentScreen = "settings" }
+                            onNavigateToSettings = { currentScreen = "settings" },
+                            onNavigateToClients = { currentScreen = "clients" }
                         )
                         "media" -> MediaManagementScreen(
                             onBack = { currentScreen = "main" }
                         )
                         "settings" -> SettingsScreen(
+                            onBack = { currentScreen = "main" }
+                        )
+                        "clients" -> ConnectedClientsScreen(
+                            clientsManager = clientsManager,
                             onBack = { currentScreen = "main" }
                         )
                     }
@@ -158,7 +168,8 @@ fun ServerScreen(
     isServerRunning: () -> Boolean,
     getServerUrl: () -> String,
     onNavigateToMedia: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToClients: () -> Unit
 ) {
     var serverRunning by remember { mutableStateOf(false) }
     
@@ -174,6 +185,9 @@ fun ServerScreen(
             LargeTopAppBar(
                 title = { Text("Movie Server") },
                 actions = {
+                    IconButton(onClick = onNavigateToClients) {
+                        Icon(Icons.Default.Devices, "Clientes Conectados")
+                    }
                     IconButton(onClick = onNavigateToMedia) {
                         Icon(Icons.Default.VideoLibrary, "Gerenciar Mídia")
                     }
@@ -221,6 +235,22 @@ fun ServerScreen(
                     modifier = Modifier.padding(end = 8.dp)
                 )
                 Text(if (serverRunning) "Parar Servidor" else "Iniciar Servidor")
+            }
+            
+            if (serverRunning) {
+                OutlinedButton(
+                    onClick = onNavigateToClients,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Devices,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text("Ver Clientes Conectados")
+                }
             }
             
             Spacer(modifier = Modifier.height(16.dp))
