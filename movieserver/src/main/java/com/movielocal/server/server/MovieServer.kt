@@ -27,11 +27,35 @@ class MovieServer(
     private val progressDatabase = ProgressDatabase(context)
     private val moviesDir: File
     private val seriesDir: File
+    private var serverIp: String = ""
 
     init {
         val externalStorage = context.getExternalFilesDir(null)
         moviesDir = File(externalStorage, "Movies").apply { mkdirs() }
         seriesDir = File(externalStorage, "Series").apply { mkdirs() }
+        serverIp = getServerIp()
+    }
+    
+    private fun getServerIp(): String {
+        return try {
+            val wifiManager = context.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+            val wifiInfo = wifiManager.connectionInfo
+            val ipInt = wifiInfo.ipAddress
+            
+            if (ipInt == 0) {
+                "localhost"
+            } else {
+                String.format(
+                    "%d.%d.%d.%d",
+                    ipInt and 0xff,
+                    ipInt shr 8 and 0xff,
+                    ipInt shr 16 and 0xff,
+                    ipInt shr 24 and 0xff
+                )
+            }
+        } catch (e: Exception) {
+            "localhost"
+        }
     }
 
     override fun serve(session: IHTTPSession): Response {
@@ -79,12 +103,12 @@ class MovieServer(
                 rating = item.rating,
                 duration = 120,
                 thumbnailUrl = if (item.coverPath != null) {
-                    "http://localhost:8080/api/thumbnail/${item.coverPath}"
+                    "http://$serverIp:8080/api/thumbnail/${item.coverPath}"
                 } else {
                     ""
                 },
                 videoUrl = if (item.filePath != null) {
-                    "http://localhost:8080/api/stream/${item.filePath}"
+                    "http://$serverIp:8080/api/stream/${item.filePath}"
                 } else {
                     ""
                 },
@@ -101,7 +125,7 @@ class MovieServer(
                 genre = item.genre,
                 rating = item.rating,
                 thumbnailUrl = if (item.coverPath != null) {
-                    "http://localhost:8080/api/thumbnail/${item.coverPath}"
+                    "http://$serverIp:8080/api/thumbnail/${item.coverPath}"
                 } else {
                     ""
                 },
@@ -116,7 +140,7 @@ class MovieServer(
                                 description = ep.description,
                                 duration = ep.duration,
                                 thumbnailUrl = "",
-                                videoUrl = "http://localhost:8080/api/stream/${ep.filePath}",
+                                videoUrl = "http://$serverIp:8080/api/stream/${ep.filePath}",
                                 filePath = ep.filePath
                             )
                         }
