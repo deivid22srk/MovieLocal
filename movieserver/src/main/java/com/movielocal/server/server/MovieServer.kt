@@ -21,7 +21,7 @@ import java.io.InputStream
 class MovieServer(
     private val context: Context,
     port: Int = 8080
-) : NanoHTTPD(port) {
+) : NanoHTTPD("0.0.0.0", port) {
 
     private val gson = Gson()
     private val database = MediaDatabase(context)
@@ -35,6 +35,9 @@ class MovieServer(
         moviesDir = File(externalStorage, "Movies").apply { mkdirs() }
         seriesDir = File(externalStorage, "Series").apply { mkdirs() }
         serverIp = getServerIp()
+        
+        android.util.Log.d("MovieServer", "Server initialized on 0.0.0.0:$port")
+        android.util.Log.d("MovieServer", "Server accessible at http://$serverIp:$port")
         
         logPermissions()
     }
@@ -79,7 +82,15 @@ class MovieServer(
         val uri = session.uri
         val method = session.method
         
-        return when {
+        android.util.Log.d("MovieServer", "Request from ${session.remoteIpAddress}: $method $uri")
+        
+        if (method == Method.OPTIONS) {
+            return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "").apply {
+                addCorsHeaders()
+            }
+        }
+        
+        val response = when {
             uri == "/api/content" -> serveContent()
             uri.startsWith("/api/stream/") -> serveVideo(uri.removePrefix("/api/stream/"))
             uri.startsWith("/api/thumbnail/") -> serveThumbnail(uri.removePrefix("/api/thumbnail/"))
@@ -95,6 +106,15 @@ class MovieServer(
             }
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
         }
+        
+        return response.apply { addCorsHeaders() }
+    }
+    
+    private fun Response.addCorsHeaders() {
+        addHeader("Access-Control-Allow-Origin", "*")
+        addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        addHeader("Access-Control-Max-Age", "3600")
     }
     
     private fun serveDebugPermissions(): Response {

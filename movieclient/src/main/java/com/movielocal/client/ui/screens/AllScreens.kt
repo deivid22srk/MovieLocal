@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.movielocal.client.data.models.Movie
 import com.movielocal.client.data.models.Series
+import com.movielocal.client.data.models.Season
+import com.movielocal.client.data.models.Episode
 import com.movielocal.client.ui.theme.iNoxBlue
 import com.movielocal.client.ui.viewmodel.UiState
 
@@ -35,7 +37,8 @@ import com.movielocal.client.ui.viewmodel.UiState
 fun HomeScreen(
     uiState: UiState,
     onRefresh: () -> Unit,
-    onPlayMovie: (String, String, String) -> Unit,
+    onMovieClick: (Movie) -> Unit,
+    onSeriesClick: (Series) -> Unit,
     onOpenSettings: () -> Unit
 ) {
     LazyColumn(
@@ -86,8 +89,8 @@ fun HomeScreen(
                                 content = featuredContent,
                                 onPlay = {
                                     when (featuredContent) {
-                                        is Movie -> onPlayMovie(featuredContent.videoUrl, featuredContent.id, featuredContent.title)
-                                        is Series -> {}
+                                        is Movie -> onMovieClick(featuredContent)
+                                        is Series -> onSeriesClick(featuredContent)
                                     }
                                 }
                             )
@@ -105,7 +108,7 @@ fun HomeScreen(
                                 title = "Movies",
                                 items = uiState.movies,
                                 onItemClick = { movie ->
-                                    onPlayMovie(movie.videoUrl, movie.id, movie.title)
+                                    onMovieClick(movie)
                                 }
                             )
                         }
@@ -115,7 +118,10 @@ fun HomeScreen(
                         item {
                             SeriesRow(
                                 title = "Series",
-                                items = uiState.series
+                                items = uiState.series,
+                                onItemClick = { series ->
+                                    onSeriesClick(series)
+                                }
                             )
                         }
                     }
@@ -393,7 +399,8 @@ fun MovieCard(
 @Composable
 fun SeriesRow(
     title: String,
-    items: List<Series>
+    items: List<Series>,
+    onItemClick: (Series) -> Unit
 ) {
     Column(modifier = Modifier.padding(top = 24.dp)) {
         Text(
@@ -409,18 +416,25 @@ fun SeriesRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(items) { series ->
-                SeriesCard(series = series)
+                SeriesCard(
+                    series = series,
+                    onClick = { onItemClick(series) }
+                )
             }
         }
     }
 }
 
 @Composable
-fun SeriesCard(series: Series) {
+fun SeriesCard(
+    series: Series,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .width(140.dp)
-            .height(200.dp),
+            .height(200.dp)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -513,7 +527,8 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
 fun SearchScreen(
     uiState: UiState,
     onSearch: (String) -> Unit,
-    onPlayMovie: (String, String, String) -> Unit
+    onMovieClick: (Movie) -> Unit,
+    onSeriesClick: (Series) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("Most Watched") }
@@ -616,7 +631,7 @@ fun SearchScreen(
                                 title = "Movies",
                                 movies = uiState.movies,
                                 onMovieClick = { movie ->
-                                    onPlayMovie(movie.videoUrl, movie.id, movie.title)
+                                    onMovieClick(movie)
                                 }
                             )
                         }
@@ -634,7 +649,10 @@ fun SearchScreen(
                         }
                         
                         items(uiState.series) { series ->
-                            SeriesSearchCard(series = series)
+                            SeriesSearchCard(
+                                series = series,
+                                onClick = { onSeriesClick(series) }
+                            )
                         }
                     }
                 }
@@ -716,11 +734,15 @@ fun SearchResultsGrid(
 }
 
 @Composable
-fun SeriesSearchCard(series: Series) {
+fun SeriesSearchCard(
+    series: Series,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp),
+            .height(120.dp)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -1113,4 +1135,334 @@ fun ConnectionDialog(
         },
         containerColor = MaterialTheme.colorScheme.surface
     )
+}
+
+// ===== DETAIL SCREEN =====
+@Composable
+fun DetailScreen(
+    movie: Movie?,
+    series: Series?,
+    onPlayMovie: (String, String, String) -> Unit,
+    onBack: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp)
+            ) {
+                AsyncImage(
+                    model = movie?.thumbnailUrl ?: series?.thumbnailUrl,
+                    contentDescription = movie?.title ?: series?.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.background
+                                ),
+                                startY = 200f
+                            )
+                        )
+                )
+                
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .size(40.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                ) {
+                    Icon(
+                        Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+        
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+            ) {
+                Spacer(Modifier.height(16.dp))
+                
+                Text(
+                    text = movie?.title ?: series?.title ?: "",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                
+                Spacer(Modifier.height(12.dp))
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Star,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = Color(0xFFFFB800)
+                        )
+                        Text(
+                            text = (movie?.rating ?: series?.rating)?.toString() ?: "0.0",
+                            fontSize = 16.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    
+                    Text(
+                        text = (movie?.year ?: series?.year)?.toString() ?: "",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    
+                    Text(
+                        text = movie?.genre ?: series?.genre ?: "",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    
+                    movie?.duration?.let { duration ->
+                        Text(
+                            text = "${duration}min",
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+                
+                Spacer(Modifier.height(20.dp))
+                
+                movie?.let {
+                    Button(
+                        onClick = { onPlayMovie(it.videoUrl, it.id, it.title) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = iNoxBlue
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Play Movie",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                
+                Spacer(Modifier.height(24.dp))
+                
+                Text(
+                    text = "Overview",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                
+                Spacer(Modifier.height(8.dp))
+                
+                Text(
+                    text = movie?.description ?: series?.description ?: "",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    lineHeight = 20.sp
+                )
+                
+                series?.let { seriesData ->
+                    Spacer(Modifier.height(32.dp))
+                    
+                    Text(
+                        text = "Episodes",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    
+                    Spacer(Modifier.height(16.dp))
+                }
+            }
+        }
+        
+        series?.seasons?.forEach { season ->
+            item {
+                SeasonSection(
+                    season = season,
+                    onEpisodeClick = { episode ->
+                        onPlayMovie(episode.videoUrl, episode.id, episode.title)
+                    }
+                )
+            }
+        }
+        
+        item {
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+fun SeasonSection(
+    season: Season,
+    onEpisodeClick: (Episode) -> Unit
+) {
+    var expanded by remember { mutableStateOf(season.seasonNumber == 1) }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded },
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Season ${season.seasonNumber}",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = Color.White
+                )
+            }
+        }
+        
+        if (expanded) {
+            Spacer(Modifier.height(12.dp))
+            
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                season.episodes.forEach { episode ->
+                    EpisodeCard(
+                        episode = episode,
+                        onClick = { onEpisodeClick(episode) }
+                    )
+                }
+            }
+        }
+        
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+fun EpisodeCard(
+    episode: Episode,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            AsyncImage(
+                model = episode.thumbnailUrl,
+                contentDescription = episode.title,
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(90.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
+            
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(12.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Episode ${episode.episodeNumber}",
+                        fontSize = 12.sp,
+                        color = iNoxBlue,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Text(
+                        text = "${episode.duration}min",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+                
+                Spacer(Modifier.height(4.dp))
+                
+                Text(
+                    text = episode.title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                Spacer(Modifier.height(4.dp))
+                
+                Text(
+                    text = episode.description,
+                    fontSize = 13.sp,
+                    color = Color.Gray,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
 }

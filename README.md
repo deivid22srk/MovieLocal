@@ -201,19 +201,68 @@ O MovieClient utiliza um tema inspirado no Netflix:
 
 ## 🐛 Troubleshooting
 
+### Cliente não conecta ao servidor de outro dispositivo
+
+**Sintoma:** O cliente só consegue conectar quando está no mesmo dispositivo que o servidor.
+
+**Soluções:**
+
+1. **Verifique a rede Wi-Fi:**
+   - Ambos os dispositivos devem estar na **mesma rede Wi-Fi**
+   - Evite usar redes com "isolamento de cliente" ativado (comum em redes públicas)
+   - Algumas redes Wi-Fi domésticas têm configurações de "isolamento entre dispositivos" - desative isso no roteador
+
+2. **Verifique o endereço IP do servidor:**
+   - No app MovieServer, o IP mostrado deve começar com `192.168.x.x` ou `10.x.x.x`
+   - Se mostrar `127.0.0.1` ou `localhost`, o servidor não detectou a conexão Wi-Fi corretamente
+   - Reconecte o dispositivo servidor ao Wi-Fi
+
+3. **Teste a conectividade:**
+   - No cliente, use a função "Auto Discover" para buscar o servidor automaticamente
+   - Ou insira manualmente o IP no formato: `192.168.1.100:8080`
+   - Certifique-se de incluir a porta `:8080`
+
+4. **Firewall e segurança:**
+   - Alguns dispositivos Android têm firewall de terceiros instalados - desative temporariamente
+   - Aplicativos de segurança podem bloquear conexões - adicione uma exceção
+   - VPNs podem interferir - desative durante o uso
+
+5. **Reinicie os aplicativos:**
+   - Force stop no MovieServer e reinicie
+   - Force stop no MovieClient e reinicie
+   - Em casos extremos, reinicie ambos os dispositivos
+
+6. **Tipo de rede:**
+   - Redes 5GHz e 2.4GHz: certifique-se de que ambos os dispositivos estão na mesma frequência
+   - Redes mesh/repetidores: podem causar problemas de isolamento
+
 ### Servidor não conecta
 - Verifique se ambos os dispositivos estão na mesma rede Wi-Fi
-- Certifique-se de que o servidor está rodando
+- Certifique-se de que o servidor está rodando (deve aparecer notificação)
 - Tente desabilitar firewall/VPN
+- Verifique se a porta 8080 não está sendo usada por outro app
 
 ### Vídeo não carrega
-- Verifique se o formato do arquivo é suportado
+- Verifique se o formato do arquivo é suportado (MP4, MKV, AVI, WEBM)
 - Confirme que o arquivo não está corrompido
 - Teste com outro arquivo
+- Verifique se o caminho do arquivo está correto no banco de dados do servidor
 
 ### Thumbnails não aparecem
 - Nomeie as imagens como `poster.jpg`, `poster.png`, `thumb.jpg` ou `thumb.png`
 - Coloque as imagens nas pastas dos filmes/séries
+- As imagens devem estar no mesmo diretório que os arquivos de vídeo
+
+### Tela de detalhes não abre ao clicar em filme/série
+- Este problema foi corrigido na versão mais recente
+- Certifique-se de estar usando a versão atualizada do MovieClient
+- Agora ao clicar em um filme/série, você verá uma tela com detalhes completos
+- Para séries, você pode selecionar temporada e episódio antes de assistir
+
+### Pesquisa não funciona
+- Este problema foi corrigido na versão mais recente
+- A busca agora funciona em tempo real
+- Clique em qualquer resultado para ver os detalhes
 
 ## 📄 Licença
 
