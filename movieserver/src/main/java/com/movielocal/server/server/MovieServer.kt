@@ -138,38 +138,63 @@ class MovieServer(
     }
 
     private fun serveVideo(path: String): Response {
-        val decodedPath = java.net.URLDecoder.decode(path, "UTF-8")
-        
         return try {
+            val decodedPath = java.net.URLDecoder.decode(path, "UTF-8")
+            android.util.Log.d("MovieServer", "Serving video: $decodedPath")
+            
             if (decodedPath.startsWith("content://")) {
                 val uri = Uri.parse(decodedPath)
-                val inputStream = context.contentResolver.openInputStream(uri)
                 
-                if (inputStream == null) {
-                    return newFixedLengthResponse(
-                        Response.Status.NOT_FOUND,
-                        MIME_PLAINTEXT,
-                        "Cannot open video from URI"
-                    )
-                }
-                
-                val fileSize = try {
-                    context.contentResolver.openAssetFileDescriptor(uri, "r")?.length ?: -1L
-                } catch (e: Exception) {
-                    -1L
-                }
-                
-                val mimeType = context.contentResolver.getType(uri) ?: "video/mp4"
-                
-                newChunkedResponse(Response.Status.OK, mimeType, inputStream).apply {
-                    addHeader("Accept-Ranges", "bytes")
-                    if (fileSize > 0) {
-                        addHeader("Content-Length", fileSize.toString())
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    
+                    if (inputStream == null) {
+                        android.util.Log.e("MovieServer", "Cannot open input stream for URI: $uri")
+                        return newFixedLengthResponse(
+                            Response.Status.NOT_FOUND,
+                            MIME_PLAINTEXT,
+                            "Cannot open video from URI"
+                        )
                     }
+                    
+                    val fileSize = try {
+                        context.contentResolver.openAssetFileDescriptor(uri, "r")?.use {
+                            it.length
+                        } ?: -1L
+                    } catch (e: Exception) {
+                        android.util.Log.w("MovieServer", "Cannot get file size: ${e.message}")
+                        -1L
+                    }
+                    
+                    val mimeType = context.contentResolver.getType(uri) ?: "video/mp4"
+                    android.util.Log.d("MovieServer", "Streaming URI with mimeType: $mimeType, size: $fileSize")
+                    
+                    newChunkedResponse(Response.Status.OK, mimeType, inputStream).apply {
+                        addHeader("Accept-Ranges", "bytes")
+                        addHeader("Access-Control-Allow-Origin", "*")
+                        if (fileSize > 0) {
+                            addHeader("Content-Length", fileSize.toString())
+                        }
+                    }
+                } catch (e: SecurityException) {
+                    android.util.Log.e("MovieServer", "Security exception accessing URI: ${e.message}")
+                    newFixedLengthResponse(
+                        Response.Status.FORBIDDEN,
+                        MIME_PLAINTEXT,
+                        "Permission denied to access video"
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.e("MovieServer", "Error opening URI: ${e.message}", e)
+                    newFixedLengthResponse(
+                        Response.Status.INTERNAL_ERROR,
+                        MIME_PLAINTEXT,
+                        "Error opening video: ${e.message}"
+                    )
                 }
             } else {
                 val file = File(decodedPath)
                 if (!file.exists() || !file.isFile) {
+                    android.util.Log.e("MovieServer", "File not found: $decodedPath")
                     return newFixedLengthResponse(
                         Response.Status.NOT_FOUND,
                         MIME_PLAINTEXT,
@@ -189,10 +214,12 @@ class MovieServer(
                 
                 newChunkedResponse(Response.Status.OK, mimeType, inputStream).apply {
                     addHeader("Accept-Ranges", "bytes")
+                    addHeader("Access-Control-Allow-Origin", "*")
                     addHeader("Content-Length", file.length().toString())
                 }
             }
         } catch (e: Exception) {
+            android.util.Log.e("MovieServer", "Fatal error in serveVideo: ${e.message}", e)
             newFixedLengthResponse(
                 Response.Status.INTERNAL_ERROR,
                 MIME_PLAINTEXT,

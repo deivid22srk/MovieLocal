@@ -133,7 +133,7 @@ class PlayerActivity : ComponentActivity() {
     
     private fun saveCurrentProgress() {
         player?.let { p ->
-            if (p.duration > 0 && videoId.isNotEmpty()) {
+            if (p.duration > 0 && p.currentPosition > 0 && videoId.isNotEmpty()) {
                 lifecycleScope.launch {
                     try {
                         val progress = VideoProgress(
@@ -441,10 +441,13 @@ fun PlayerControls(
             .background(Color.Black.copy(alpha = 0.7f))
             .padding(16.dp)
     ) {
+        val validDuration = if (duration > 0) duration else 1L
+        
         Slider(
             value = if (duration > 0) currentPosition.toFloat() else 0f,
-            onValueChange = { player.seekTo(it.toLong()) },
-            valueRange = 0f..duration.toFloat(),
+            onValueChange = { if (duration > 0) player.seekTo(it.toLong()) },
+            valueRange = 0f..validDuration.toFloat(),
+            enabled = duration > 0,
             modifier = Modifier.fillMaxWidth()
         )
         
