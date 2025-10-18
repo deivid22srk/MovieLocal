@@ -29,6 +29,7 @@ import com.movielocal.client.data.models.Movie
 import com.movielocal.client.data.models.Series
 import com.movielocal.client.ui.theme.iNoxBlue
 import com.movielocal.client.ui.viewmodel.UiState
+import com.movielocal.client.ui.viewmodel.UiState
 
 // ===== HOME SCREEN =====
 @Composable
@@ -52,6 +53,18 @@ fun HomeScreen(
         }
         
         when (uiState) {
+            is UiState.Initial -> {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(400.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = iNoxBlue)
+                    }
+                }
+            }
             is UiState.Loading -> {
                 item {
                     Box(
@@ -584,6 +597,14 @@ fun SearchScreen(
         Spacer(Modifier.height(24.dp))
         
         when (uiState) {
+            is UiState.Initial -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = iNoxBlue)
+                }
+            }
             is UiState.Success -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

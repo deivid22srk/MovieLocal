@@ -116,13 +116,13 @@ fun MovieApp(
             when (currentScreen) {
                 "home" -> HomeScreen(
                     uiState = uiState,
-                    onRefresh = { viewModel.refreshContent() },
+                    onRefresh = { viewModel.loadContent() },
                     onPlayMovie = onPlayMovie,
                     onOpenSettings = { showConnectionDialog = true }
                 )
                 "search" -> SearchScreen(
                     uiState = uiState,
-                    onSearch = { query -> viewModel.setSearchQuery(query) },
+                    onSearch = { query -> viewModel.updateSearchQuery(query) },
                     onPlayMovie = onPlayMovie
                 )
                 "profile" -> ProfileScreen(
