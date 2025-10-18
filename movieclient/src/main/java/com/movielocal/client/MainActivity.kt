@@ -180,8 +180,6 @@ fun MovieApp(
                     onPlaySeries = onPlaySeries,
                     onBack = { currentScreen = "home" }
                 )
-                    onBack = { currentScreen = "home" }
-                )
             }
         }
     }
