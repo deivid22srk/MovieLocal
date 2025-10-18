@@ -11,23 +11,30 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val NetflixRed = Color(0xFFE50914)
-private val NetflixDarkRed = Color(0xFFB20710)
-private val NetflixBlack = Color(0xFF141414)
-private val NetflixDarkGray = Color(0xFF1F1F1F)
-private val NetflixGray = Color(0xFF2F2F2F)
+val iNoxBlue = Color(0xFF4169E1)
+val iNoxDarkBlue = Color(0xFF2854C7)
+val iNoxBlack = Color(0xFF0A0A0A)
+val iNoxDarkGray = Color(0xFF1A1A1A)
+val iNoxGray = Color(0xFF2A2A2A)
+val iNoxLightGray = Color(0xFF3A3A3A)
 
 private val DarkColorScheme = darkColorScheme(
-    primary = NetflixRed,
-    secondary = NetflixDarkRed,
-    tertiary = NetflixGray,
-    background = NetflixBlack,
-    surface = NetflixDarkGray,
+    primary = iNoxBlue,
+    primaryContainer = iNoxDarkBlue,
+    secondary = iNoxDarkBlue,
+    secondaryContainer = iNoxGray,
+    tertiary = iNoxLightGray,
+    background = iNoxBlack,
+    surface = iNoxDarkGray,
+    surfaceVariant = iNoxGray,
     onPrimary = Color.White,
+    onPrimaryContainer = Color.White,
     onSecondary = Color.White,
+    onSecondaryContainer = Color.White,
     onTertiary = Color.White,
     onBackground = Color.White,
-    onSurface = Color.White
+    onSurface = Color.White,
+    onSurfaceVariant = Color(0xFFB0B0B0)
 )
 
 @Composable
