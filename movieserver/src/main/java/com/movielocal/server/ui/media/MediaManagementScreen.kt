@@ -105,7 +105,7 @@ fun MediaManagementScreen(
     }
     
     if (showAddDialog) {
-        AddMediaDialog(
+        AddMediaDialogEnhanced(
             onDismiss = { showAddDialog = false },
             onSave = { item ->
                 database.saveMediaItem(item)
@@ -765,6 +765,7 @@ fun AddEpisodeDialog(
     var duration by remember { mutableStateOf("45") }
     var videoUri by remember { mutableStateOf<Uri?>(null) }
     var videoFileName by remember { mutableStateOf("") }
+    var showFileBrowser by remember { mutableStateOf(false) }
     
     val videoLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -793,10 +794,28 @@ fun AddEpisodeDialog(
         }
     }
     
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Adicionar Episódio $nextEpisodeNumber") },
-        text = {
+    if (showFileBrowser) {
+        FileBrowserScreen(
+            onFileSelected = { uri, fileName ->
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                videoUri = uri
+                videoFileName = fileName
+                val detectedDuration = database.getVideoDuration(uri)
+                if (detectedDuration > 0) {
+                    duration = detectedDuration.toString()
+                }
+                showFileBrowser = false
+            },
+            onDismiss = { showFileBrowser = false }
+        )
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Adicionar Episódio $nextEpisodeNumber") },
+            text = {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.heightIn(max = 400.dp)
@@ -830,13 +849,26 @@ fun AddEpisodeDialog(
                 }
                 
                 item {
-                    Button(
-                        onClick = { videoLauncher.launch(arrayOf("video/*")) },
-                        modifier = Modifier.fillMaxWidth()
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.VideoFile, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (videoUri != null) "✓ $videoFileName" else "Selecionar Arquivo de Vídeo")
+                        Button(
+                            onClick = { showFileBrowser = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Folder, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Navegar por Arquivos")
+                        }
+                        
+                        OutlinedButton(
+                            onClick = { videoLauncher.launch(arrayOf("video/*")) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.VideoFile, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Seletor Rápido")
+                        }
                     }
                 }
                 
@@ -901,4 +933,5 @@ fun AddEpisodeDialog(
             }
         }
     )
+    }
 }
