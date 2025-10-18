@@ -129,12 +129,32 @@ class MovieServer(
         val decodedPath = java.net.URLDecoder.decode(path, "UTF-8")
         
         return try {
-            val (inputStream, fileSize, mimeType) = if (decodedPath.startsWith("content://")) {
+            if (decodedPath.startsWith("content://")) {
                 val uri = Uri.parse(decodedPath)
-                val stream = context.contentResolver.openInputStream(uri)
-                val size = context.contentResolver.openAssetFileDescriptor(uri, "r")?.length ?: -1L
-                val type = context.contentResolver.getType(uri) ?: "video/mp4"
-                Triple(stream, size, type)
+                val inputStream = context.contentResolver.openInputStream(uri)
+                
+                if (inputStream == null) {
+                    return newFixedLengthResponse(
+                        Response.Status.NOT_FOUND,
+                        MIME_PLAINTEXT,
+                        "Cannot open video from URI"
+                    )
+                }
+                
+                val fileSize = try {
+                    context.contentResolver.openAssetFileDescriptor(uri, "r")?.length ?: -1L
+                } catch (e: Exception) {
+                    -1L
+                }
+                
+                val mimeType = context.contentResolver.getType(uri) ?: "video/mp4"
+                
+                newChunkedResponse(Response.Status.OK, mimeType, inputStream).apply {
+                    addHeader("Accept-Ranges", "bytes")
+                    if (fileSize > 0) {
+                        addHeader("Content-Length", fileSize.toString())
+                    }
+                }
             } else {
                 val file = File(decodedPath)
                 if (!file.exists() || !file.isFile) {
@@ -145,28 +165,19 @@ class MovieServer(
                     )
                 }
                 
-                val mType = when (file.extension.lowercase()) {
+                val mimeType = when (file.extension.lowercase()) {
                     "mp4" -> "video/mp4"
                     "mkv" -> "video/x-matroska"
                     "avi" -> "video/x-msvideo"
                     "webm" -> "video/webm"
                     else -> "video/mp4"
                 }
-                Triple(FileInputStream(file), file.length(), mType)
-            }
-            
-            if (inputStream == null) {
-                return newFixedLengthResponse(
-                    Response.Status.NOT_FOUND,
-                    MIME_PLAINTEXT,
-                    "Cannot open video"
-                )
-            }
-            
-            newChunkedResponse(Response.Status.OK, mimeType, inputStream).apply {
-                addHeader("Accept-Ranges", "bytes")
-                if (fileSize > 0) {
-                    addHeader("Content-Length", fileSize.toString())
+                
+                val inputStream = FileInputStream(file)
+                
+                newChunkedResponse(Response.Status.OK, mimeType, inputStream).apply {
+                    addHeader("Accept-Ranges", "bytes")
+                    addHeader("Content-Length", file.length().toString())
                 }
             }
         } catch (e: Exception) {
