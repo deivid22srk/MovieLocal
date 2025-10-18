@@ -2,6 +2,7 @@ package com.movielocal.server.server
 
 import android.content.Context
 import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import com.google.gson.Gson
 import com.movielocal.server.data.MediaDatabase
 import com.movielocal.server.data.MediaType
@@ -34,6 +35,22 @@ class MovieServer(
         moviesDir = File(externalStorage, "Movies").apply { mkdirs() }
         seriesDir = File(externalStorage, "Series").apply { mkdirs() }
         serverIp = getServerIp()
+        
+        logPermissions()
+    }
+    
+    private fun logPermissions() {
+        try {
+            val permissions = context.contentResolver.persistedUriPermissions
+            android.util.Log.d("MovieServer", "=== SERVER STARTED ===")
+            android.util.Log.d("MovieServer", "Server IP: $serverIp")
+            android.util.Log.d("MovieServer", "Total persistent URI permissions: ${permissions.size}")
+            permissions.forEach { perm ->
+                android.util.Log.d("MovieServer", "  - ${perm.uri} (read=${perm.isReadPermission}, write=${perm.isWritePermission})")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MovieServer", "Error logging permissions: ${e.message}")
+        }
     }
     
     private fun getServerIp(): String {
@@ -67,6 +84,7 @@ class MovieServer(
             uri.startsWith("/api/stream/") -> serveVideo(uri.removePrefix("/api/stream/"))
             uri.startsWith("/api/thumbnail/") -> serveThumbnail(uri.removePrefix("/api/thumbnail/"))
             uri == "/api/health" -> serveHealth()
+            uri == "/api/debug/permissions" -> serveDebugPermissions()
             uri.startsWith("/api/progress/") && method == Method.GET -> {
                 val videoId = uri.removePrefix("/api/progress/")
                 getProgress(videoId)
@@ -76,6 +94,29 @@ class MovieServer(
                 saveProgress(session, videoId)
             }
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
+        }
+    }
+    
+    private fun serveDebugPermissions(): Response {
+        val permissions = context.contentResolver.persistedUriPermissions
+        val debugInfo = mapOf(
+            "serverIp" to serverIp,
+            "totalPermissions" to permissions.size,
+            "permissions" to permissions.map { 
+                mapOf(
+                    "uri" to it.uri.toString(),
+                    "read" to it.isReadPermission,
+                    "write" to it.isWritePermission
+                )
+            }
+        )
+        
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            gson.toJson(debugInfo)
+        ).apply {
+            addHeader("Access-Control-Allow-Origin", "*")
         }
     }
 
@@ -164,34 +205,83 @@ class MovieServer(
     private fun serveVideo(path: String): Response {
         return try {
             val decodedPath = java.net.URLDecoder.decode(path, "UTF-8")
-            android.util.Log.d("MovieServer", "Serving video: $decodedPath")
+            android.util.Log.d("MovieServer", "Serving video request for: $decodedPath")
             
             if (decodedPath.startsWith("content://")) {
                 val uri = Uri.parse(decodedPath)
+                android.util.Log.d("MovieServer", "Parsed URI: $uri")
                 
                 try {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                    
-                    if (inputStream == null) {
-                        android.util.Log.e("MovieServer", "Cannot open input stream for URI: $uri")
-                        return newFixedLengthResponse(
-                            Response.Status.NOT_FOUND,
-                            MIME_PLAINTEXT,
-                            "Cannot open video from URI"
-                        )
+                    val persistedPermissions = context.contentResolver.persistedUriPermissions
+                    android.util.Log.d("MovieServer", "Total persisted permissions: ${persistedPermissions.size}")
+                    persistedPermissions.forEach { perm ->
+                        android.util.Log.d("MovieServer", "Permission: ${perm.uri} (read=${perm.isReadPermission})")
                     }
                     
-                    val fileSize = try {
-                        context.contentResolver.openAssetFileDescriptor(uri, "r")?.use {
-                            it.length
-                        } ?: -1L
+                    val hasPermission = persistedPermissions.any { 
+                        perm -> perm.uri.toString() == uri.toString() && perm.isReadPermission 
+                    }
+                    
+                    android.util.Log.d("MovieServer", "Has permission for $uri: $hasPermission")
+                    
+                    if (!hasPermission) {
+                        android.util.Log.w("MovieServer", "URI not in persisted permissions, checking tree permissions...")
+                        
+                        val treePermission = persistedPermissions.firstOrNull { perm ->
+                            perm.isReadPermission && uri.toString().contains(perm.uri.toString().substringAfter("document/"))
+                        }
+                        
+                        if (treePermission != null) {
+                            android.util.Log.d("MovieServer", "Found tree permission: ${treePermission.uri}")
+                        } else {
+                            android.util.Log.e("MovieServer", "WARNING: No permission found. This may cause access failure.")
+                        }
+                    }
+                    
+                    val assetFileDescriptor = try {
+                        context.contentResolver.openAssetFileDescriptor(uri, "r")
                     } catch (e: Exception) {
-                        android.util.Log.w("MovieServer", "Cannot get file size: ${e.message}")
-                        -1L
+                        android.util.Log.e("MovieServer", "AssetFileDescriptor failed, trying DocumentFile...")
+                        
+                        val documentFile = DocumentFile.fromSingleUri(context, uri)
+                        if (documentFile != null && documentFile.canRead()) {
+                            android.util.Log.d("MovieServer", "DocumentFile accessible, trying via ParcelFileDescriptor...")
+                            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+                            if (pfd != null) {
+                                val inputStream = android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd)
+                                val mimeType = documentFile.type ?: "video/mp4"
+                                val fileSize = documentFile.length()
+                                
+                                android.util.Log.d("MovieServer", "SUCCESS via DocumentFile - size: $fileSize")
+                                
+                                return newChunkedResponse(Response.Status.OK, mimeType, inputStream).apply {
+                                    addHeader("Accept-Ranges", "bytes")
+                                    addHeader("Access-Control-Allow-Origin", "*")
+                                    if (fileSize > 0) {
+                                        addHeader("Content-Length", fileSize.toString())
+                                    }
+                                }
+                            }
+                        }
+                        throw e
                     }
+                    
+                    if (assetFileDescriptor == null) {
+                        android.util.Log.e("MovieServer", "openAssetFileDescriptor returned null for URI: $uri")
+                        return newFixedLengthResponse(
+                            Response.Status.FORBIDDEN,
+                            "application/json",
+                            "{\"error\":\"Cannot open video - permission denied. Please re-add this video in the server app.\"}"
+                        ).apply {
+                            addHeader("Access-Control-Allow-Origin", "*")
+                        }
+                    }
+                    
+                    val inputStream = assetFileDescriptor.createInputStream()
+                    val fileSize = assetFileDescriptor.length
                     
                     val mimeType = context.contentResolver.getType(uri) ?: "video/mp4"
-                    android.util.Log.d("MovieServer", "Streaming URI with mimeType: $mimeType, size: $fileSize")
+                    android.util.Log.d("MovieServer", "SUCCESS - Streaming URI with mimeType: $mimeType, size: $fileSize bytes")
                     
                     newChunkedResponse(Response.Status.OK, mimeType, inputStream).apply {
                         addHeader("Accept-Ranges", "bytes")
@@ -201,19 +291,24 @@ class MovieServer(
                         }
                     }
                 } catch (e: SecurityException) {
-                    android.util.Log.e("MovieServer", "Security exception accessing URI: ${e.message}")
+                    android.util.Log.e("MovieServer", "SecurityException for URI $uri: ${e.message}", e)
                     newFixedLengthResponse(
                         Response.Status.FORBIDDEN,
-                        MIME_PLAINTEXT,
-                        "Permission denied to access video"
-                    )
+                        "application/json",
+                        "{\"error\":\"Permission denied: ${e.message}. Please re-add this video in the server app to grant permissions again.\"}"
+                    ).apply {
+                        addHeader("Access-Control-Allow-Origin", "*")
+                    }
                 } catch (e: Exception) {
-                    android.util.Log.e("MovieServer", "Error opening URI: ${e.message}", e)
+                    android.util.Log.e("MovieServer", "Exception opening URI $uri: ${e.message}", e)
+                    e.printStackTrace()
                     newFixedLengthResponse(
                         Response.Status.INTERNAL_ERROR,
-                        MIME_PLAINTEXT,
-                        "Error opening video: ${e.message}"
-                    )
+                        "application/json",
+                        "{\"error\":\"Error opening video: ${e.message}. If you reinstalled the app, please re-add all videos.\"}"
+                    ).apply {
+                        addHeader("Access-Control-Allow-Origin", "*")
+                    }
                 }
             } else {
                 val file = File(decodedPath)
