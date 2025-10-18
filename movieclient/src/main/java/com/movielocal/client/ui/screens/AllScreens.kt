@@ -29,6 +29,7 @@ import com.movielocal.client.data.models.Movie
 import com.movielocal.client.data.models.Series
 import com.movielocal.client.data.models.Season
 import com.movielocal.client.data.models.Episode
+import com.movielocal.client.data.models.VideoProgress
 import com.movielocal.client.ui.theme.iNoxBlue
 import com.movielocal.client.ui.viewmodel.UiState
 
