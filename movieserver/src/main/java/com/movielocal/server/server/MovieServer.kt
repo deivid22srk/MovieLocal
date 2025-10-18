@@ -2,6 +2,8 @@ package com.movielocal.server.server
 
 import android.content.Context
 import com.google.gson.Gson
+import com.movielocal.server.data.MediaDatabase
+import com.movielocal.server.data.MediaType
 import com.movielocal.server.models.ContentResponse
 import com.movielocal.server.models.Episode
 import com.movielocal.server.models.Movie
@@ -17,6 +19,7 @@ class MovieServer(
 ) : NanoHTTPD(port) {
 
     private val gson = Gson()
+    private val database = MediaDatabase(context)
     private val moviesDir: File
     private val seriesDir: File
 
@@ -52,10 +55,69 @@ class MovieServer(
     }
 
     private fun serveContent(): Response {
-        val movies = scanMovies()
-        val series = scanSeries()
+        val dbMovies = database.getMovies().map { item ->
+            Movie(
+                id = item.id,
+                title = item.title,
+                description = item.description,
+                year = item.year,
+                genre = item.genre,
+                rating = item.rating,
+                duration = 120,
+                thumbnailUrl = if (item.coverPath != null) {
+                    "http://localhost:8080/api/thumbnail/${item.coverPath}"
+                } else {
+                    ""
+                },
+                videoUrl = if (item.filePath != null) {
+                    "http://localhost:8080/api/stream/${item.filePath}"
+                } else {
+                    ""
+                },
+                filePath = item.filePath ?: ""
+            )
+        }
         
-        val contentResponse = ContentResponse(movies = movies, series = series)
+        val dbSeries = database.getSeries().map { item ->
+            Series(
+                id = item.id,
+                title = item.title,
+                description = item.description,
+                year = item.year,
+                genre = item.genre,
+                rating = item.rating,
+                thumbnailUrl = if (item.coverPath != null) {
+                    "http://localhost:8080/api/thumbnail/${item.coverPath}"
+                } else {
+                    ""
+                },
+                seasons = item.seasons?.map { season ->
+                    Season(
+                        seasonNumber = season.seasonNumber,
+                        episodes = season.episodes.map { ep ->
+                            Episode(
+                                id = "${item.id}_S${season.seasonNumber}E${ep.episodeNumber}",
+                                episodeNumber = ep.episodeNumber,
+                                title = ep.title,
+                                description = ep.description,
+                                duration = ep.duration,
+                                thumbnailUrl = "",
+                                videoUrl = "http://localhost:8080/api/stream/${ep.filePath}",
+                                filePath = ep.filePath
+                            )
+                        }
+                    )
+                } ?: emptyList()
+            )
+        }
+        
+        val scannedMovies = scanMovies()
+        val scannedSeries = scanSeries()
+        
+        val allMovies = (dbMovies + scannedMovies).distinctBy { it.id }
+        val allSeries = (dbSeries + scannedSeries).distinctBy { it.id }
+        
+        val contentResponse = ContentResponse(movies = allMovies, series = allSeries)
         val json = gson.toJson(contentResponse)
         
         return newFixedLengthResponse(

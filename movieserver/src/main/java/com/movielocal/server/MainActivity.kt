@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.movielocal.server.server.MovieServerService
 import com.movielocal.server.ui.theme.MovieLocalTheme
+import com.movielocal.server.ui.media.MediaManagementScreen
+import com.movielocal.server.ui.settings.SettingsScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -63,16 +65,28 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             MovieLocalTheme {
+                var currentScreen by remember { mutableStateOf("main") }
+                
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    ServerScreen(
-                        onStartServer = { startServer() },
-                        onStopServer = { stopServer() },
-                        isServerRunning = { serverService?.isServerRunning ?: false },
-                        getServerUrl = { getServerUrl() }
-                    )
+                    when (currentScreen) {
+                        "main" -> ServerScreen(
+                            onStartServer = { startServer() },
+                            onStopServer = { stopServer() },
+                            isServerRunning = { serverService?.isServerRunning ?: false },
+                            getServerUrl = { getServerUrl() },
+                            onNavigateToMedia = { currentScreen = "media" },
+                            onNavigateToSettings = { currentScreen = "settings" }
+                        )
+                        "media" -> MediaManagementScreen(
+                            onBack = { currentScreen = "main" }
+                        )
+                        "settings" -> SettingsScreen(
+                            onBack = { currentScreen = "main" }
+                        )
+                    }
                 }
             }
         }
@@ -142,7 +156,9 @@ fun ServerScreen(
     onStartServer: () -> Unit,
     onStopServer: () -> Unit,
     isServerRunning: () -> Boolean,
-    getServerUrl: () -> String
+    getServerUrl: () -> String,
+    onNavigateToMedia: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
     var serverRunning by remember { mutableStateOf(false) }
     
@@ -157,6 +173,14 @@ fun ServerScreen(
         topBar = {
             LargeTopAppBar(
                 title = { Text("Movie Server") },
+                actions = {
+                    IconButton(onClick = onNavigateToMedia) {
+                        Icon(Icons.Default.VideoLibrary, "Gerenciar Mídia")
+                    }
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(Icons.Default.Settings, "Configurações")
+                    }
+                },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer
                 )
