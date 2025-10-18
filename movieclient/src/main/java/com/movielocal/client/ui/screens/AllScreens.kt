@@ -29,7 +29,6 @@ import com.movielocal.client.data.models.Movie
 import com.movielocal.client.data.models.Series
 import com.movielocal.client.ui.theme.iNoxBlue
 import com.movielocal.client.ui.viewmodel.UiState
-import com.movielocal.client.ui.viewmodel.UiState
 
 // ===== HOME SCREEN =====
 @Composable
