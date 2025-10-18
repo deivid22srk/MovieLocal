@@ -1,7 +1,9 @@
 package com.movielocal.client.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.movielocal.client.data.api.ServerDiscovery
 import com.movielocal.client.data.models.Movie
 import com.movielocal.client.data.models.Series
 import com.movielocal.client.data.repository.MovieRepository
@@ -19,12 +21,16 @@ sealed class UiState {
 
 data class ConnectionState(
     val isConnected: Boolean = false,
-    val serverUrl: String = ""
+    val serverUrl: String = "",
+    val discoveredServerIp: String? = null,
+    val isDiscovering: Boolean = false
 )
 
-class MovieViewModel : ViewModel() {
+class MovieViewModel(application: Application) : AndroidViewModel(application) {
     
     private val repository = MovieRepository()
+    private val serverDiscovery = ServerDiscovery(application)
+    private val prefs = application.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
     
     private val _uiState = MutableStateFlow<UiState>(UiState.Initial)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -43,6 +49,7 @@ class MovieViewModel : ViewModel() {
         }
         
         repository.setServerUrl(formattedUrl)
+        prefs.edit().putString("server_url", formattedUrl).apply()
         _connectionState.value = ConnectionState(serverUrl = formattedUrl)
         checkConnection()
     }
@@ -93,5 +100,22 @@ class MovieViewModel : ViewModel() {
             it.title.contains(_searchQuery.value, ignoreCase = true) ||
             it.genre.contains(_searchQuery.value, ignoreCase = true)
         }
+    }
+    
+    fun discoverServer() {
+        viewModelScope.launch {
+            _connectionState.value = _connectionState.value.copy(isDiscovering = true)
+            
+            val serverIp = serverDiscovery.findServer()
+            
+            _connectionState.value = _connectionState.value.copy(
+                isDiscovering = false,
+                discoveredServerIp = serverIp
+            )
+        }
+    }
+    
+    fun clearDiscoveredServer() {
+        _connectionState.value = _connectionState.value.copy(discoveredServerIp = null)
     }
 }

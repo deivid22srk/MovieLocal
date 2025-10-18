@@ -112,3 +112,17 @@ data class HealthResponse(
     @SerializedName("serverTime")
     val serverTime: Long
 )
+
+data class VideoProgress(
+    @SerializedName("videoId")
+    val videoId: String,
+    
+    @SerializedName("position")
+    val position: Long,
+    
+    @SerializedName("duration")
+    val duration: Long,
+    
+    @SerializedName("timestamp")
+    val timestamp: Long = System.currentTimeMillis()
+)

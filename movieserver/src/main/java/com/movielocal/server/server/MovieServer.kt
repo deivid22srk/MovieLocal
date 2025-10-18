@@ -5,6 +5,8 @@ import android.net.Uri
 import com.google.gson.Gson
 import com.movielocal.server.data.MediaDatabase
 import com.movielocal.server.data.MediaType
+import com.movielocal.server.data.ProgressDatabase
+import com.movielocal.server.data.VideoProgress
 import com.movielocal.server.models.ContentResponse
 import com.movielocal.server.models.Episode
 import com.movielocal.server.models.Movie
@@ -22,6 +24,7 @@ class MovieServer(
 
     private val gson = Gson()
     private val database = MediaDatabase(context)
+    private val progressDatabase = ProgressDatabase(context)
     private val moviesDir: File
     private val seriesDir: File
 
@@ -33,12 +36,21 @@ class MovieServer(
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
+        val method = session.method
         
         return when {
             uri == "/api/content" -> serveContent()
             uri.startsWith("/api/stream/") -> serveVideo(uri.removePrefix("/api/stream/"))
             uri.startsWith("/api/thumbnail/") -> serveThumbnail(uri.removePrefix("/api/thumbnail/"))
             uri == "/api/health" -> serveHealth()
+            uri.startsWith("/api/progress/") && method == Method.GET -> {
+                val videoId = uri.removePrefix("/api/progress/")
+                getProgress(videoId)
+            }
+            uri.startsWith("/api/progress/") && method == Method.POST -> {
+                val videoId = uri.removePrefix("/api/progress/")
+                saveProgress(session, videoId)
+            }
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
         }
     }
@@ -217,6 +229,66 @@ class MovieServer(
                 MIME_PLAINTEXT,
                 "Error loading thumbnail"
             )
+        }
+    }
+    
+    private fun getProgress(videoId: String): Response {
+        val decodedVideoId = java.net.URLDecoder.decode(videoId, "UTF-8")
+        val progress = progressDatabase.getProgress(decodedVideoId)
+        
+        return if (progress != null) {
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(progress)
+            ).apply {
+                addHeader("Access-Control-Allow-Origin", "*")
+            }
+        } else {
+            newFixedLengthResponse(
+                Response.Status.NOT_FOUND,
+                "application/json",
+                gson.toJson(mapOf("error" to "No progress found"))
+            ).apply {
+                addHeader("Access-Control-Allow-Origin", "*")
+            }
+        }
+    }
+    
+    private fun saveProgress(session: IHTTPSession, videoId: String): Response {
+        return try {
+            val decodedVideoId = java.net.URLDecoder.decode(videoId, "UTF-8")
+            
+            val bodyMap = mutableMapOf<String, String>()
+            session.parseBody(bodyMap)
+            val body = bodyMap["postData"] ?: ""
+            
+            val progressData = gson.fromJson(body, VideoProgress::class.java)
+            
+            val progress = VideoProgress(
+                videoId = decodedVideoId,
+                position = progressData.position,
+                duration = progressData.duration,
+                timestamp = System.currentTimeMillis()
+            )
+            
+            progressDatabase.saveProgress(progress)
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "success"))
+            ).apply {
+                addHeader("Access-Control-Allow-Origin", "*")
+            }
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            ).apply {
+                addHeader("Access-Control-Allow-Origin", "*")
+            }
         }
     }
 }

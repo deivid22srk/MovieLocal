@@ -45,9 +45,11 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     MovieApp(
-                        onPlayMovie = { videoUrl ->
+                        onPlayMovie = { videoUrl, videoId, videoTitle ->
                             startActivity(Intent(this, PlayerActivity::class.java).apply {
                                 putExtra("VIDEO_URL", videoUrl)
+                                putExtra("VIDEO_ID", videoId)
+                                putExtra("VIDEO_TITLE", videoTitle)
                             })
                         }
                     )
@@ -61,28 +63,56 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MovieApp(
     viewModel: MovieViewModel = viewModel(),
-    onPlayMovie: (String) -> Unit
+    onPlayMovie: (String, String, String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     
     var showConnectionDialog by remember { mutableStateOf(connectionState.serverUrl.isEmpty()) }
+    var showServerFoundDialog by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     
     LaunchedEffect(Unit) {
         if (connectionState.serverUrl.isEmpty()) {
             showConnectionDialog = true
+            viewModel.discoverServer()
         }
+    }
+    
+    LaunchedEffect(connectionState.discoveredServerIp) {
+        if (connectionState.discoveredServerIp != null && connectionState.serverUrl.isEmpty()) {
+            showServerFoundDialog = true
+        }
+    }
+    
+    if (showServerFoundDialog && connectionState.discoveredServerIp != null) {
+        ServerFoundDialog(
+            serverIp = connectionState.discoveredServerIp!!,
+            onAccept = {
+                viewModel.setServerUrl("${connectionState.discoveredServerIp}:8080")
+                showServerFoundDialog = false
+                showConnectionDialog = false
+                viewModel.clearDiscoveredServer()
+            },
+            onDecline = {
+                showServerFoundDialog = false
+                viewModel.clearDiscoveredServer()
+            }
+        )
     }
     
     if (showConnectionDialog) {
         ConnectionDialog(
+            isDiscovering = connectionState.isDiscovering,
             onConnect = { url ->
                 viewModel.setServerUrl(url)
                 showConnectionDialog = false
             },
-            onDismiss = { }
+            onDismiss = { },
+            onRetryDiscovery = {
+                viewModel.discoverServer()
+            }
         )
     }
     
@@ -159,14 +189,14 @@ fun MovieApp(
                         MoviesScreen(
                             movies = viewModel.getFilteredMovies(state.movies),
                             onMovieClick = { movie ->
-                                onPlayMovie(movie.videoUrl)
+                                onPlayMovie(movie.videoUrl, movie.id, movie.title)
                             }
                         )
                     } else {
                         SeriesScreen(
                             series = viewModel.getFilteredSeries(state.series),
                             onEpisodeClick = { episode ->
-                                onPlayMovie(episode.videoUrl)
+                                onPlayMovie(episode.videoUrl, episode.id, episode.title)
                             }
                         )
                     }
@@ -213,9 +243,55 @@ fun SearchBar(
 }
 
 @Composable
+fun ServerFoundDialog(
+    serverIp: String,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDecline,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.CloudDone,
+                contentDescription = null,
+                tint = Color.Green,
+                modifier = Modifier.size(48.dp)
+            )
+        },
+        title = { Text("Servidor Encontrado!") },
+        text = {
+            Column {
+                Text("Encontramos um servidor na sua rede local:")
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "$serverIp:8080",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Deseja conectar a este servidor?")
+            }
+        },
+        confirmButton = {
+            Button(onClick = onAccept) {
+                Text("Conectar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDecline) {
+                Text("Não")
+            }
+        }
+    )
+}
+
+@Composable
 fun ConnectionDialog(
+    isDiscovering: Boolean,
     onConnect: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onRetryDiscovery: () -> Unit
 ) {
     var serverUrl by remember { mutableStateOf("") }
     
@@ -224,14 +300,38 @@ fun ConnectionDialog(
         title = { Text("Conectar ao Servidor") },
         text = {
             Column {
-                Text("Digite o endereço IP do servidor:")
+                if (isDiscovering) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        Text("Procurando servidor na rede local...")
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                
+                Text("Ou digite o endereço IP manualmente:")
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = serverUrl,
                     onValueChange = { serverUrl = it },
                     placeholder = { Text("192.168.1.100:8080") },
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
+                
+                if (!isDiscovering) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onRetryDiscovery,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Buscar servidor novamente")
+                    }
+                }
             }
         },
         confirmButton = {
@@ -240,7 +340,8 @@ fun ConnectionDialog(
                     if (serverUrl.isNotEmpty()) {
                         onConnect(serverUrl)
                     }
-                }
+                },
+                enabled = serverUrl.isNotEmpty()
             ) {
                 Text("Conectar")
             }
