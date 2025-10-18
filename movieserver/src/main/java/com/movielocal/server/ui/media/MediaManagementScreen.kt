@@ -105,7 +105,7 @@ fun MediaManagementScreen(
     }
     
     if (showAddDialog) {
-        AddMediaDialogEnhanced(
+        AddMediaDialogWithRealPath(
             onDismiss = { showAddDialog = false },
             onSave = { item ->
                 database.saveMediaItem(item)
@@ -763,50 +763,26 @@ fun AddEpisodeDialog(
     var episodeTitle by remember { mutableStateOf("Episódio $nextEpisodeNumber") }
     var description by remember { mutableStateOf("") }
     var duration by remember { mutableStateOf("45") }
-    var videoUri by remember { mutableStateOf<Uri?>(null) }
+    var videoPath by remember { mutableStateOf<String?>(null) }
     var videoFileName by remember { mutableStateOf("") }
     var showFileBrowser by remember { mutableStateOf(false) }
     
-    val videoLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri -> 
-        if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            videoUri = uri
-            
-            val cursor = context.contentResolver.query(uri, null, null, null, null)
-            videoFileName = cursor?.use {
-                val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameIndex >= 0 && it.moveToFirst()) {
-                    it.getString(nameIndex)
-                } else {
-                    "Arquivo selecionado"
-                }
-            } ?: "Arquivo selecionado"
-            
-            val detectedDuration = database.getVideoDuration(uri)
-            if (detectedDuration > 0) {
-                duration = detectedDuration.toString()
-            }
-        }
-    }
+
     
     if (showFileBrowser) {
-        FileBrowserScreen(
-            onFileSelected = { uri, fileName ->
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                videoUri = uri
-                videoFileName = fileName
-                val detectedDuration = database.getVideoDuration(uri)
-                if (detectedDuration > 0) {
-                    duration = detectedDuration.toString()
+        RealFileBrowserScreen(
+            onFileSelected = { path ->
+                videoPath = path
+                videoFileName = java.io.File(path).name
+                
+                val file = java.io.File(path)
+                if (file.exists()) {
+                    val detectedDuration = database.getVideoDurationFromFile(file)
+                    if (detectedDuration > 0) {
+                        duration = detectedDuration.toString()
+                    }
                 }
+                
                 showFileBrowser = false
             },
             onDismiss = { showFileBrowser = false }
@@ -849,56 +825,52 @@ fun AddEpisodeDialog(
                 }
                 
                 item {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Button(
+                        onClick = { showFileBrowser = true },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Button(
-                            onClick = { showFileBrowser = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Folder, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Navegar por Arquivos")
-                        }
-                        
-                        OutlinedButton(
-                            onClick = { videoLauncher.launch(arrayOf("video/*")) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.VideoFile, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Seletor Rápido")
-                        }
+                        Icon(Icons.Default.Folder, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Selecionar Arquivo de Vídeo")
                     }
                 }
                 
-                if (videoUri != null) {
+                if (videoPath != null) {
                     item {
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.primaryContainer
                             )
                         ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Column {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
                                     Text(
                                         text = "Arquivo selecionado:",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                    Text(
-                                        text = videoFileName,
-                                        style = MaterialTheme.typography.bodyMedium
+                                        style = MaterialTheme.typography.titleSmall
                                     )
                                 }
+                                
+                                Text(
+                                    text = videoFileName,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                
+                                Text(
+                                    text = "Caminho: $videoPath",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
                             }
                         }
                     }
@@ -908,21 +880,19 @@ fun AddEpisodeDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (videoUri != null) {
-                        val videoPath = database.getVideoPathFromUri(videoUri!!)
-                        
+                    if (videoPath != null) {
                         val episode = EpisodeData(
                             episodeNumber = nextEpisodeNumber,
                             title = episodeTitle,
                             description = description,
-                            filePath = videoPath ?: videoUri.toString(),
+                            filePath = videoPath!!,
                             duration = duration.toIntOrNull() ?: 45
                         )
                         
                         onSave(episode)
                     }
                 },
-                enabled = videoUri != null && episodeTitle.isNotEmpty()
+                enabled = videoPath != null && episodeTitle.isNotEmpty()
             ) {
                 Text("Salvar")
             }

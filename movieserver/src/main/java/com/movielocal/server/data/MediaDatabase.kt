@@ -113,6 +113,23 @@ class MediaDatabase(private val context: Context) {
         }
     }
     
+    fun getVideoDurationFromFile(file: java.io.File): Int {
+        return try {
+            val retriever = android.media.MediaMetadataRetriever()
+            retriever.setDataSource(file.absolutePath)
+            
+            val durationMs = retriever.extractMetadata(
+                android.media.MediaMetadataRetriever.METADATA_KEY_DURATION
+            )?.toLongOrNull() ?: 0L
+            
+            retriever.release()
+            
+            (durationMs / 60000).toInt()
+        } catch (e: Exception) {
+            0
+        }
+    }
+    
     fun exportToJson(): String {
         return gson.toJson(getAllMediaItems())
     }
