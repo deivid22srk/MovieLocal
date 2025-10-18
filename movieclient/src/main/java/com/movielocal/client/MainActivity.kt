@@ -117,7 +117,7 @@ fun MovieApp(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(if (currentScreen == "detail") 0.dp else paddingValues)) {
+        Box(modifier = Modifier.then(if (currentScreen == "detail") Modifier else Modifier.padding(paddingValues))) {
             when (currentScreen) {
                 "home" -> HomeScreen(
                     uiState = uiState,
