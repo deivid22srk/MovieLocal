@@ -1,0 +1,44 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main", "capy/**" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout the Repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build MovieServer with Gradle
+      run: ./gradlew :movieserver:assembleDebug
+
+    - name: Build MovieClient with Gradle
+      run: ./gradlew :movieclient:assembleDebug
+
+    - name: Upload MovieServer APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: MovieServer-APK
+        path: ./movieserver/build/outputs/apk/debug/movieserver-debug.apk
+
+    - name: Upload MovieClient APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: MovieClient-APK
+        path: ./movieclient/build/outputs/apk/debug/movieclient-debug.apk
