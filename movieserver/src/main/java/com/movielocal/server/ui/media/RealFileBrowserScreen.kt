@@ -42,6 +42,13 @@ data class RealFileItem(
     val lastModified: Long
 )
 
+data class StorageLocation(
+    val name: String,
+    val path: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val isRemovable: Boolean
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RealFileBrowserScreen(
@@ -49,14 +56,17 @@ fun RealFileBrowserScreen(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val availableStorages = remember { getAvailableStorages(context) }
+    var currentStorageIndex by remember { mutableStateOf(0) }
     var currentDirectory by remember { 
-        mutableStateOf<File>(Environment.getExternalStorageDirectory())
+        mutableStateOf<File>(if (availableStorages.isNotEmpty()) File(availableStorages[0].path) else Environment.getExternalStorageDirectory())
     }
     var fileList by remember { mutableStateOf<List<RealFileItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showPermissionDialog by remember { mutableStateOf(false) }
     var showShortcutsDialog by remember { mutableStateOf(false) }
+    var showStorageSelector by remember { mutableStateOf(false) }
     
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -122,6 +132,18 @@ fun RealFileBrowserScreen(
                     }
                 },
                 actions = {
+                    if (availableStorages.size > 1) {
+                        IconButton(
+                            onClick = { showStorageSelector = true }
+                        ) {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ) {
+                                Text(availableStorages.size.toString())
+                            }
+                        }
+                    }
+                    
                     IconButton(
                         onClick = { showShortcutsDialog = true }
                     ) {
@@ -140,10 +162,14 @@ fun RealFileBrowserScreen(
                     
                     IconButton(
                         onClick = {
-                            currentDirectory = Environment.getExternalStorageDirectory()
+                            if (availableStorages.isNotEmpty()) {
+                                currentDirectory = File(availableStorages[currentStorageIndex].path)
+                            } else {
+                                currentDirectory = Environment.getExternalStorageDirectory()
+                            }
                         }
                     ) {
-                        Icon(Icons.Default.Home, "Armazenamento interno")
+                        Icon(Icons.Default.Home, "Raiz do armazenamento")
                     }
                 }
             )
@@ -219,6 +245,7 @@ fun RealFileBrowserScreen(
     
     if (showShortcutsDialog) {
         ShortcutsDialog(
+            currentStorage = if (availableStorages.isNotEmpty()) availableStorages[currentStorageIndex] else null,
             onDismiss = { showShortcutsDialog = false },
             onSelectPath = { path ->
                 val file = File(path)
@@ -226,6 +253,19 @@ fun RealFileBrowserScreen(
                     currentDirectory = file
                 }
                 showShortcutsDialog = false
+            }
+        )
+    }
+    
+    if (showStorageSelector && availableStorages.isNotEmpty()) {
+        StorageSelectorDialog(
+            storages = availableStorages,
+            currentIndex = currentStorageIndex,
+            onDismiss = { showStorageSelector = false },
+            onSelectStorage = { index ->
+                currentStorageIndex = index
+                currentDirectory = File(availableStorages[index].path)
+                showStorageSelector = false
             }
         )
     }
@@ -502,18 +542,20 @@ fun EmptyDirectoryScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShortcutsDialog(
+    currentStorage: StorageLocation?,
     onDismiss: () -> Unit,
     onSelectPath: (String) -> Unit
 ) {
-    val shortcuts = remember {
+    val storagePath = currentStorage?.path ?: Environment.getExternalStorageDirectory().absolutePath
+    val shortcuts = remember(storagePath) {
         listOf(
-            "Armazenamento Interno" to Environment.getExternalStorageDirectory().absolutePath,
-            "Downloads" to Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath,
-            "Filmes" to Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath,
-            "DCIM (Câmera)" to Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).absolutePath,
-            "Música" to Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath,
-            "Documentos" to Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath
-        )
+            "Downloads" to "$storagePath/Download",
+            "Filmes" to "$storagePath/Movies",
+            "DCIM (Câmera)" to "$storagePath/DCIM",
+            "Música" to "$storagePath/Music",
+            "Documentos" to "$storagePath/Documents",
+            "Vídeos" to "$storagePath/Videos"
+        ).filter { (_, path) -> File(path).exists() }
     }
     
     AlertDialog(
@@ -673,4 +715,208 @@ private fun formatFileSize(size: Long): String {
 private fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
     return sdf.format(Date(timestamp))
+}
+
+private fun getAvailableStorages(context: Context): List<StorageLocation> {
+    val storages = mutableListOf<StorageLocation>()
+    
+    // Adiciona memória interna
+    val internalStorage = Environment.getExternalStorageDirectory()
+    storages.add(
+        StorageLocation(
+            name = "Memória Interna",
+            path = internalStorage.absolutePath,
+            icon = Icons.Default.Storage,
+            isRemovable = false
+        )
+    )
+    
+    // Tenta detectar cartão SD externo
+    try {
+        val externalDirs = context.getExternalFilesDirs(null)
+        
+        externalDirs?.forEachIndexed { index, file ->
+            if (file != null && index > 0) {
+                // Navega até a raiz do storage removível
+                var current: File? = file
+                var sdCardRoot: File? = null
+                
+                while (current != null) {
+                    val parent = current.parentFile
+                    if (parent != null && parent.absolutePath == "/storage") {
+                        sdCardRoot = current
+                        break
+                    }
+                    current = parent
+                }
+                
+                if (sdCardRoot != null && sdCardRoot.exists() && sdCardRoot.canRead()) {
+                    val sdPath = sdCardRoot.absolutePath
+                    // Verifica se não é a memória interna
+                    if (!sdPath.contains("emulated") && sdPath != internalStorage.absolutePath) {
+                        storages.add(
+                            StorageLocation(
+                                name = "Cartão SD ${if (storages.size > 1) storages.size else ""}".trim(),
+                                path = sdPath,
+                                icon = Icons.Default.SdCard,
+                                isRemovable = true
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    } catch (e: Exception) {
+        // Ignora erros de detecção de SD card
+    }
+    
+    // Método alternativo: verifica diretórios comuns de SD card
+    val commonSdPaths = listOf(
+        "/storage/sdcard1",
+        "/storage/extSdCard",
+        "/storage/external_SD",
+        "/mnt/sdcard/external_sd"
+    )
+    
+    commonSdPaths.forEach { path ->
+        val sdFile = File(path)
+        if (sdFile.exists() && sdFile.canRead() && !storages.any { it.path == path }) {
+            storages.add(
+                StorageLocation(
+                    name = "Cartão SD",
+                    path = path,
+                    icon = Icons.Default.SdCard,
+                    isRemovable = true
+                )
+            )
+        }
+    }
+    
+    return storages
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StorageSelectorDialog(
+    storages: List<StorageLocation>,
+    currentIndex: Int,
+    onDismiss: () -> Unit,
+    onSelectStorage: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Storage, null)
+                Text("Selecionar Armazenamento")
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    "Escolha qual armazenamento deseja navegar:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                Spacer(Modifier.height(8.dp))
+                
+                storages.forEachIndexed { index, storage ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectStorage(index) },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (index == currentIndex)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (index == currentIndex)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.primaryContainer
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = storage.icon,
+                                    contentDescription = null,
+                                    tint = if (index == currentIndex)
+                                        MaterialTheme.colorScheme.onPrimary
+                                    else
+                                        MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = storage.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (index == currentIndex) 
+                                        FontWeight.Bold 
+                                    else 
+                                        FontWeight.Medium
+                                )
+                                
+                                Text(
+                                    text = storage.path,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                
+                                if (storage.isRemovable) {
+                                    Text(
+                                        text = "Removível",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                }
+                            }
+                            
+                            if (index == currentIndex) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Fechar")
+            }
+        }
+    )
 }
