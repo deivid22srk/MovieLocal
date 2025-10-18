@@ -1,6 +1,7 @@
 package com.movielocal.server.server
 
 import android.content.Context
+import android.net.Uri
 import com.google.gson.Gson
 import com.movielocal.server.data.MediaDatabase
 import com.movielocal.server.data.MediaType
@@ -12,6 +13,7 @@ import com.movielocal.server.models.Series
 import fi.iki.elonen.NanoHTTPD
 import java.io.File
 import java.io.FileInputStream
+import java.io.InputStream
 
 class MovieServer(
     private val context: Context,
@@ -131,29 +133,47 @@ class MovieServer(
 
     private fun serveVideo(path: String): Response {
         val decodedPath = java.net.URLDecoder.decode(path, "UTF-8")
-        val file = File(decodedPath)
         
-        if (!file.exists() || !file.isFile) {
-            return newFixedLengthResponse(
-                Response.Status.NOT_FOUND,
-                MIME_PLAINTEXT,
-                "Video not found"
-            )
-        }
-
-        val mimeType = when (file.extension.lowercase()) {
-            "mp4" -> "video/mp4"
-            "mkv" -> "video/x-matroska"
-            "avi" -> "video/x-msvideo"
-            "webm" -> "video/webm"
-            else -> "video/mp4"
-        }
-
         return try {
-            val fis = FileInputStream(file)
-            newChunkedResponse(Response.Status.OK, mimeType, fis).apply {
+            val (inputStream, fileSize, mimeType) = if (decodedPath.startsWith("content://")) {
+                val uri = Uri.parse(decodedPath)
+                val stream = context.contentResolver.openInputStream(uri)
+                val size = context.contentResolver.openAssetFileDescriptor(uri, "r")?.length ?: -1L
+                val type = context.contentResolver.getType(uri) ?: "video/mp4"
+                Triple(stream, size, type)
+            } else {
+                val file = File(decodedPath)
+                if (!file.exists() || !file.isFile) {
+                    return newFixedLengthResponse(
+                        Response.Status.NOT_FOUND,
+                        MIME_PLAINTEXT,
+                        "Video not found: $decodedPath"
+                    )
+                }
+                
+                val mType = when (file.extension.lowercase()) {
+                    "mp4" -> "video/mp4"
+                    "mkv" -> "video/x-matroska"
+                    "avi" -> "video/x-msvideo"
+                    "webm" -> "video/webm"
+                    else -> "video/mp4"
+                }
+                Triple(FileInputStream(file), file.length(), mType)
+            }
+            
+            if (inputStream == null) {
+                return newFixedLengthResponse(
+                    Response.Status.NOT_FOUND,
+                    MIME_PLAINTEXT,
+                    "Cannot open video"
+                )
+            }
+            
+            newChunkedResponse(Response.Status.OK, mimeType, inputStream).apply {
                 addHeader("Accept-Ranges", "bytes")
-                addHeader("Content-Length", file.length().toString())
+                if (fileSize > 0) {
+                    addHeader("Content-Length", fileSize.toString())
+                }
             }
         } catch (e: Exception) {
             newFixedLengthResponse(

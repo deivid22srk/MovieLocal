@@ -89,22 +89,19 @@ class MediaDatabase(private val context: Context) {
     }
     
     fun saveVideoFile(uri: Uri, itemId: String, episodeId: String? = null): String {
-        val moviesDir = if (episodeId == null) {
-            File(context.getExternalFilesDir(null), "Movies/$itemId").apply { mkdirs() }
-        } else {
-            File(context.getExternalFilesDir(null), "Series/$itemId").apply { mkdirs() }
-        }
-        
-        val fileName = if (episodeId != null) "$episodeId.mp4" else "video.mp4"
-        val videoFile = File(moviesDir, fileName)
-        
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            videoFile.outputStream().use { output ->
-                input.copyTo(output)
+        return uri.toString()
+    }
+    
+    fun getVideoPathFromUri(uri: Uri): String? {
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        return cursor?.use {
+            val columnIndex = it.getColumnIndex("_data")
+            if (columnIndex >= 0 && it.moveToFirst()) {
+                it.getString(columnIndex)
+            } else {
+                uri.toString()
             }
         }
-        
-        return videoFile.absolutePath
     }
     
     fun exportToJson(): String {
