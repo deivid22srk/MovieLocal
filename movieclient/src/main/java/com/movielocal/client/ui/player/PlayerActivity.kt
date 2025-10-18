@@ -96,7 +96,7 @@ class PlayerActivity : ComponentActivity() {
                             startProgressTracking()
                         },
                         onEnterPip = {
-                            enterPictureInPictureMode()
+                            enterPipMode()
                         }
                     )
                 }
@@ -104,7 +104,7 @@ class PlayerActivity : ComponentActivity() {
         }
     }
     
-    private fun enterPictureInPictureMode() {
+    private fun enterPipMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val rational = Rational(16, 9)
             val params = PictureInPictureParams.Builder()
