@@ -89,18 +89,48 @@ class MediaDatabase(private val context: Context) {
     }
     
     fun saveVideoFile(uri: Uri, itemId: String, episodeId: String? = null): String {
-        return uri.toString()
+        return getVideoPathFromUri(uri) ?: uri.toString()
     }
     
     fun getVideoPathFromUri(uri: Uri): String? {
-        val cursor = context.contentResolver.query(uri, null, null, null, null)
-        return cursor?.use {
-            val columnIndex = it.getColumnIndex("_data")
-            if (columnIndex >= 0 && it.moveToFirst()) {
-                it.getString(columnIndex)
-            } else {
-                uri.toString()
+        if (uri.scheme == "file") {
+            return uri.path
+        }
+        
+        if (uri.scheme == "content") {
+            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            return cursor?.use {
+                val columnIndex = it.getColumnIndex("_data")
+                if (columnIndex >= 0 && it.moveToFirst()) {
+                    it.getString(columnIndex)
+                } else {
+                    null
+                }
             }
+        }
+        
+        return null
+    }
+    
+    fun getVideoDuration(uri: Uri): Int {
+        return try {
+            val retriever = android.media.MediaMetadataRetriever()
+            
+            if (uri.scheme == "content") {
+                retriever.setDataSource(context, uri)
+            } else {
+                retriever.setDataSource(uri.toString())
+            }
+            
+            val durationMs = retriever.extractMetadata(
+                android.media.MediaMetadataRetriever.METADATA_KEY_DURATION
+            )?.toLongOrNull() ?: 0L
+            
+            retriever.release()
+            
+            (durationMs / 60000).toInt()
+        } catch (e: Exception) {
+            0
         }
     }
     

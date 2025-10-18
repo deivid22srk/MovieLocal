@@ -242,6 +242,7 @@ fun AddMediaDialog(
     var description by remember { mutableStateOf("") }
     var coverUri by remember { mutableStateOf<Uri?>(null) }
     var videoUri by remember { mutableStateOf<Uri?>(null) }
+    var detectedDuration by remember { mutableStateOf<Int?>(null) }
     
     val coverLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -256,6 +257,8 @@ fun AddMediaDialog(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
             videoUri = uri
+            
+            detectedDuration = database.getVideoDuration(uri)
         }
     }
     
@@ -353,6 +356,32 @@ fun AddMediaDialog(
                             Icon(Icons.Default.VideoLibrary, null)
                             Spacer(Modifier.width(8.dp))
                             Text(if (videoUri != null) "Vídeo selecionado ✓" else "Selecionar Vídeo")
+                        }
+                    }
+                    
+                    if (detectedDuration != null && detectedDuration!! > 0) {
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.AccessTime,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Duração detectada: $detectedDuration minutos",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -739,7 +768,7 @@ fun AddEpisodeDialog(
     
     val videoLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
-    ) { uri ->
+    ) { uri -> 
         if (uri != null) {
             context.contentResolver.takePersistableUriPermission(
                 uri,
@@ -756,6 +785,11 @@ fun AddEpisodeDialog(
                     "Arquivo selecionado"
                 }
             } ?: "Arquivo selecionado"
+            
+            val detectedDuration = database.getVideoDuration(uri)
+            if (detectedDuration > 0) {
+                duration = detectedDuration.toString()
+            }
         }
     }
     

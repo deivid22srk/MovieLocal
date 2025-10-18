@@ -113,13 +113,7 @@ class MovieServer(
             )
         }
         
-        val scannedMovies = scanMovies()
-        val scannedSeries = scanSeries()
-        
-        val allMovies = (dbMovies + scannedMovies).distinctBy { it.id }
-        val allSeries = (dbSeries + scannedSeries).distinctBy { it.id }
-        
-        val contentResponse = ContentResponse(movies = allMovies, series = allSeries)
+        val contentResponse = ContentResponse(movies = dbMovies, series = dbSeries)
         val json = gson.toJson(contentResponse)
         
         return newFixedLengthResponse(
@@ -213,104 +207,5 @@ class MovieServer(
                 "Error loading thumbnail"
             )
         }
-    }
-
-    private fun scanMovies(): List<Movie> {
-        val movies = mutableListOf<Movie>()
-        
-        moviesDir.listFiles()?.forEach { movieFolder ->
-            if (movieFolder.isDirectory) {
-                val videoFile = movieFolder.listFiles()?.find { 
-                    it.extension.lowercase() in listOf("mp4", "mkv", "avi", "webm")
-                }
-                
-                val thumbnailFile = movieFolder.listFiles()?.find {
-                    it.name.lowercase().contains("poster") || it.name.lowercase().contains("thumb")
-                }
-
-                if (videoFile != null) {
-                    val movie = Movie(
-                        id = movieFolder.name,
-                        title = movieFolder.name.replace("_", " "),
-                        description = "Descrição do filme ${movieFolder.name}",
-                        year = 2024,
-                        genre = "Ação",
-                        rating = 8.5f,
-                        duration = 120,
-                        thumbnailUrl = if (thumbnailFile != null) {
-                            "http://localhost:8080/api/thumbnail/${thumbnailFile.absolutePath}"
-                        } else {
-                            ""
-                        },
-                        videoUrl = "http://localhost:8080/api/stream/${videoFile.absolutePath}",
-                        filePath = videoFile.absolutePath
-                    )
-                    movies.add(movie)
-                }
-            }
-        }
-        
-        return movies
-    }
-
-    private fun scanSeries(): List<Series> {
-        val seriesList = mutableListOf<Series>()
-        
-        seriesDir.listFiles()?.forEach { seriesFolder ->
-            if (seriesFolder.isDirectory) {
-                val seasons = mutableListOf<Season>()
-                
-                seriesFolder.listFiles()?.sortedBy { it.name }?.forEach { seasonFolder ->
-                    if (seasonFolder.isDirectory && seasonFolder.name.startsWith("Season", ignoreCase = true)) {
-                        val seasonNumber = seasonFolder.name.filter { it.isDigit() }.toIntOrNull() ?: 1
-                        val episodes = mutableListOf<Episode>()
-                        
-                        seasonFolder.listFiles()?.sortedBy { it.name }?.forEachIndexed { index, episodeFile ->
-                            if (episodeFile.extension.lowercase() in listOf("mp4", "mkv", "avi", "webm")) {
-                                val episode = Episode(
-                                    id = "${seriesFolder.name}_S${seasonNumber}E${index + 1}",
-                                    episodeNumber = index + 1,
-                                    title = "Episódio ${index + 1}",
-                                    description = "Descrição do episódio ${index + 1}",
-                                    duration = 45,
-                                    thumbnailUrl = "",
-                                    videoUrl = "http://localhost:8080/api/stream/${episodeFile.absolutePath}",
-                                    filePath = episodeFile.absolutePath
-                                )
-                                episodes.add(episode)
-                            }
-                        }
-                        
-                        if (episodes.isNotEmpty()) {
-                            seasons.add(Season(seasonNumber = seasonNumber, episodes = episodes))
-                        }
-                    }
-                }
-                
-                val thumbnailFile = seriesFolder.listFiles()?.find {
-                    it.name.lowercase().contains("poster") || it.name.lowercase().contains("thumb")
-                }
-                
-                if (seasons.isNotEmpty()) {
-                    val series = Series(
-                        id = seriesFolder.name,
-                        title = seriesFolder.name.replace("_", " "),
-                        description = "Descrição da série ${seriesFolder.name}",
-                        year = 2024,
-                        genre = "Drama",
-                        rating = 9.0f,
-                        thumbnailUrl = if (thumbnailFile != null) {
-                            "http://localhost:8080/api/thumbnail/${thumbnailFile.absolutePath}"
-                        } else {
-                            ""
-                        },
-                        seasons = seasons
-                    )
-                    seriesList.add(series)
-                }
-            }
-        }
-        
-        return seriesList
     }
 }
