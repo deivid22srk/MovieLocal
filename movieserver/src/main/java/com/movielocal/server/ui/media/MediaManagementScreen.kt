@@ -45,6 +45,7 @@ fun MediaManagementScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     var selectedItem by remember { mutableStateOf<MediaItem?>(null) }
+    var editingItem by remember { mutableStateOf<MediaItem?>(null) }
     
     Scaffold(
         topBar = {
@@ -96,6 +97,7 @@ fun MediaManagementScreen(
                     MediaItemCard(
                         item = item,
                         onClick = { selectedItem = item },
+                        onEdit = { editingItem = item },
                         onDelete = {
                             database.deleteMediaItem(item.id)
                             mediaItems = database.getAllMediaItems()
@@ -128,12 +130,37 @@ fun MediaManagementScreen(
             }
         )
     }
+    
+    if (editingItem != null) {
+        if (editingItem!!.type == MediaType.MOVIE) {
+            EditMovieDialog(
+                item = editingItem!!,
+                onDismiss = { editingItem = null },
+                onSave = { updated ->
+                    database.saveMediaItem(updated)
+                    mediaItems = database.getAllMediaItems()
+                    editingItem = null
+                }
+            )
+        } else {
+            EditSeriesDialog(
+                item = editingItem!!,
+                onDismiss = { editingItem = null },
+                onSave = { updated ->
+                    database.saveMediaItem(updated)
+                    mediaItems = database.getAllMediaItems()
+                    editingItem = null
+                }
+            )
+        }
+    }
 }
 
 @Composable
 fun MediaItemCard(
     item: MediaItem,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -216,12 +243,22 @@ fun MediaItemCard(
                 }
             }
             
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Excluir",
-                    tint = MaterialTheme.colorScheme.error
-                )
+            Column {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Editar",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Excluir",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
@@ -436,6 +473,8 @@ fun SeriesDetailsScreen(
     var seasons by remember { mutableStateOf(series.seasons ?: emptyList()) }
     var showAddSeasonDialog by remember { mutableStateOf(false) }
     var selectedSeasonIndex by remember { mutableStateOf<Int?>(null) }
+    var showEditSeriesDialog by remember { mutableStateOf(false) }
+    var editingSeasonIndex by remember { mutableStateOf<Int?>(null) }
     
     Scaffold(
         topBar = {
@@ -447,6 +486,10 @@ fun SeriesDetailsScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showEditSeriesDialog = true }) {
+                        Icon(Icons.Default.Edit, "Editar Série")
+                    }
+                    
                     IconButton(onClick = { showAddSeasonDialog = true }) {
                         Icon(Icons.Default.Add, "Adicionar Temporada")
                     }
@@ -466,6 +509,7 @@ fun SeriesDetailsScreen(
                     season = season,
                     seasonNumber = season.seasonNumber,
                     onClick = { selectedSeasonIndex = index },
+                    onEdit = { editingSeasonIndex = index },
                     onDelete = {
                         seasons = seasons.filterIndexed { i, _ -> i != index }
                         onUpdate(series.copy(seasons = seasons))
@@ -500,6 +544,31 @@ fun SeriesDetailsScreen(
             }
         )
     }
+    
+    if (showEditSeriesDialog) {
+        EditSeriesDialog(
+            item = series,
+            onDismiss = { showEditSeriesDialog = false },
+            onSave = { updated ->
+                onUpdate(updated.copy(seasons = seasons))
+                showEditSeriesDialog = false
+            }
+        )
+    }
+    
+    if (editingSeasonIndex != null) {
+        EditSeasonDialog(
+            season = seasons[editingSeasonIndex!!],
+            onDismiss = { editingSeasonIndex = null },
+            onSave = { updatedSeason ->
+                seasons = seasons.toMutableList().apply {
+                    set(editingSeasonIndex!!, updatedSeason)
+                }
+                onUpdate(series.copy(seasons = seasons))
+                editingSeasonIndex = null
+            }
+        )
+    }
 }
 
 @Composable
@@ -507,6 +576,7 @@ fun SeasonCard(
     season: SeasonData,
     seasonNumber: Int,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -535,6 +605,14 @@ fun SeasonCard(
                     text = "${season.episodes.size} episódios",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            IconButton(onClick = onEdit) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Editar",
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
             
@@ -626,6 +704,7 @@ fun EpisodeManagementScreen(
     
     var episodes by remember { mutableStateOf(season.episodes) }
     var showAddEpisodeDialog by remember { mutableStateOf(false) }
+    var editingEpisodeIndex by remember { mutableStateOf<Int?>(null) }
     
     Scaffold(
         topBar = {
@@ -662,6 +741,9 @@ fun EpisodeManagementScreen(
             itemsIndexed(episodes.sortedBy { it.episodeNumber }) { index, episode ->
                 EpisodeCard(
                     episode = episode,
+                    onEdit = {
+                        editingEpisodeIndex = episodes.indexOf(episode)
+                    },
                     onDelete = {
                         episodes = episodes.filterIndexed { i, _ -> i != index }
                         onUpdate(season.copy(episodes = episodes))
@@ -710,11 +792,26 @@ fun EpisodeManagementScreen(
             }
         )
     }
+    
+    if (editingEpisodeIndex != null) {
+        EditEpisodeDialog(
+            episode = episodes[editingEpisodeIndex!!],
+            onDismiss = { editingEpisodeIndex = null },
+            onSave = { updatedEpisode ->
+                episodes = episodes.toMutableList().apply {
+                    set(editingEpisodeIndex!!, updatedEpisode)
+                }
+                onUpdate(season.copy(episodes = episodes))
+                editingEpisodeIndex = null
+            }
+        )
+    }
 }
 
 @Composable
 fun EpisodeCard(
     episode: EpisodeData,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
@@ -768,6 +865,14 @@ fun EpisodeCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
+                )
+            }
+            
+            IconButton(onClick = onEdit) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Editar",
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
             
@@ -936,4 +1041,529 @@ fun AddEpisodeDialog(
         }
     )
     }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditMovieDialog(
+    item: MediaItem,
+    onDismiss: () -> Unit,
+    onSave: (MediaItem) -> Unit
+) {
+    val context = LocalContext.current
+    val database = remember { MediaDatabase(context) }
+    
+    var title by remember { mutableStateOf(item.title) }
+    var year by remember { mutableStateOf(item.year.toString()) }
+    var genre by remember { mutableStateOf(item.genre) }
+    var rating by remember { mutableStateOf(item.rating.toString()) }
+    var description by remember { mutableStateOf(item.description) }
+    var duration by remember { mutableStateOf(item.filePath?.let { database.getVideoDurationFromFile(java.io.File(it)) }?.toString() ?: "0") }
+    var coverUri by remember { mutableStateOf<Uri?>(item.coverPath?.let { Uri.parse("file://$it") }) }
+    
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        coverUri = uri
+    }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Edit, null)
+                Text("Editar Filme")
+            }
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    if (coverUri != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { imagePicker.launch("image/*") }
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(coverUri),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.3f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { imagePicker.launch("image/*") },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Image, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Selecionar Capa")
+                        }
+                    }
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Título") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = year,
+                        onValueChange = { if (it.isEmpty() || it.toIntOrNull() != null) year = it },
+                        label = { Text("Ano") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = genre,
+                        onValueChange = { genre = it },
+                        label = { Text("Gênero") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = rating,
+                        onValueChange = { if (it.isEmpty() || it.toFloatOrNull() != null) rating = it },
+                        label = { Text("Avaliação (0-10)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = duration,
+                        onValueChange = { if (it.isEmpty() || it.toIntOrNull() != null) duration = it },
+                        label = { Text("Duração (minutos)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Descrição") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 5
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val updatedCoverPath = if (coverUri != null && coverUri != Uri.parse("file://${item.coverPath}")) {
+                        database.saveCoverImage(coverUri!!, item.id)
+                    } else {
+                        item.coverPath
+                    }
+                    
+                    val updatedItem = item.copy(
+                        title = title,
+                        year = year.toIntOrNull() ?: item.year,
+                        genre = genre,
+                        rating = rating.toFloatOrNull()?.coerceIn(0f, 10f) ?: item.rating,
+                        description = description,
+                        coverPath = updatedCoverPath
+                    )
+                    onSave(updatedItem)
+                },
+                enabled = title.isNotBlank() && year.toIntOrNull() != null
+            ) {
+                Text("Salvar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditSeriesDialog(
+    item: MediaItem,
+    onDismiss: () -> Unit,
+    onSave: (MediaItem) -> Unit
+) {
+    val context = LocalContext.current
+    val database = remember { MediaDatabase(context) }
+    
+    var title by remember { mutableStateOf(item.title) }
+    var year by remember { mutableStateOf(item.year.toString()) }
+    var genre by remember { mutableStateOf(item.genre) }
+    var rating by remember { mutableStateOf(item.rating.toString()) }
+    var description by remember { mutableStateOf(item.description) }
+    var coverUri by remember { mutableStateOf<Uri?>(item.coverPath?.let { Uri.parse("file://$it") }) }
+    
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        coverUri = uri
+    }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Edit, null)
+                Text("Editar Série")
+            }
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    if (coverUri != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { imagePicker.launch("image/*") }
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(coverUri),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.3f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { imagePicker.launch("image/*") },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Image, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Selecionar Capa")
+                        }
+                    }
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Título") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = year,
+                        onValueChange = { if (it.isEmpty() || it.toIntOrNull() != null) year = it },
+                        label = { Text("Ano") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = genre,
+                        onValueChange = { genre = it },
+                        label = { Text("Gênero") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = rating,
+                        onValueChange = { if (it.isEmpty() || it.toFloatOrNull() != null) rating = it },
+                        label = { Text("Avaliação (0-10)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Descrição") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 5
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val updatedCoverPath = if (coverUri != null && coverUri != Uri.parse("file://${item.coverPath}")) {
+                        database.saveCoverImage(coverUri!!, item.id)
+                    } else {
+                        item.coverPath
+                    }
+                    
+                    val updatedItem = item.copy(
+                        title = title,
+                        year = year.toIntOrNull() ?: item.year,
+                        genre = genre,
+                        rating = rating.toFloatOrNull()?.coerceIn(0f, 10f) ?: item.rating,
+                        description = description,
+                        coverPath = updatedCoverPath
+                    )
+                    onSave(updatedItem)
+                },
+                enabled = title.isNotBlank() && year.toIntOrNull() != null
+            ) {
+                Text("Salvar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditSeasonDialog(
+    season: SeasonData,
+    onDismiss: () -> Unit,
+    onSave: (SeasonData) -> Unit
+) {
+    var seasonNumber by remember { mutableStateOf(season.seasonNumber.toString()) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Edit, null)
+                Text("Editar Temporada")
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "Edite o número da temporada:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                
+                OutlinedTextField(
+                    value = seasonNumber,
+                    onValueChange = { 
+                        if (it.isEmpty() || it.toIntOrNull() != null) {
+                            seasonNumber = it
+                        }
+                    },
+                    label = { Text("Número da Temporada") },
+                    placeholder = { Text("Ex: 1, 2, 3...") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                Text(
+                    "Os episódios serão mantidos.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val number = seasonNumber.toIntOrNull()
+                    if (number != null && number > 0) {
+                        val updatedSeason = season.copy(seasonNumber = number)
+                        onSave(updatedSeason)
+                    }
+                },
+                enabled = seasonNumber.toIntOrNull()?.let { it > 0 } == true
+            ) {
+                Text("Salvar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditEpisodeDialog(
+    episode: EpisodeData,
+    onDismiss: () -> Unit,
+    onSave: (EpisodeData) -> Unit
+) {
+    var episodeNumber by remember { mutableStateOf(episode.episodeNumber.toString()) }
+    var title by remember { mutableStateOf(episode.title) }
+    var description by remember { mutableStateOf(episode.description) }
+    var duration by remember { mutableStateOf(episode.duration.toString()) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Edit, null)
+                Text("Editar Episódio")
+            }
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    OutlinedTextField(
+                        value = episodeNumber,
+                        onValueChange = { 
+                            if (it.isEmpty() || it.toIntOrNull() != null) {
+                                episodeNumber = it
+                            }
+                        },
+                        label = { Text("Número do Episódio") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Título") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Descrição") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 5
+                    )
+                }
+                
+                item {
+                    OutlinedTextField(
+                        value = duration,
+                        onValueChange = { 
+                            if (it.isEmpty() || it.toIntOrNull() != null) {
+                                duration = it
+                            }
+                        },
+                        label = { Text("Duração (minutos)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val number = episodeNumber.toIntOrNull()
+                    val dur = duration.toIntOrNull()
+                    if (number != null && number > 0 && dur != null && dur > 0) {
+                        val updatedEpisode = episode.copy(
+                            episodeNumber = number,
+                            title = title,
+                            description = description,
+                            duration = dur
+                        )
+                        onSave(updatedEpisode)
+                    }
+                },
+                enabled = episodeNumber.toIntOrNull()?.let { it > 0 } == true && 
+                         title.isNotBlank() && 
+                         duration.toIntOrNull()?.let { it > 0 } == true
+            ) {
+                Text("Salvar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
 }
