@@ -15,9 +15,13 @@ import com.movielocal.client.ui.player.PlayerActivity
 import com.movielocal.client.ui.screens.HomeScreen
 import com.movielocal.client.ui.screens.SearchScreen
 import com.movielocal.client.ui.screens.ProfileScreen
+import com.movielocal.client.ui.screens.ProfileSelectionScreen
+import com.movielocal.client.ui.screens.ProfileManagementScreen
 import com.movielocal.client.ui.screens.BottomNavigationBar
 import com.movielocal.client.ui.screens.ServerFoundDialog
 import com.movielocal.client.ui.screens.ConnectionDialog
+import com.movielocal.client.data.ProfileManager
+import androidx.compose.ui.platform.LocalContext
 import com.movielocal.client.ui.theme.MovieLocalTheme
 import com.movielocal.client.ui.viewmodel.MovieViewModel
 
@@ -71,11 +75,16 @@ fun MovieApp(
     onPlayMovie: (String, String, String) -> Unit,
     onPlaySeries: (com.movielocal.client.data.models.Series, Int, Int) -> Unit
 ) {
+    val context = LocalContext.current
+    val profileManager = remember { ProfileManager(context) }
+    
     val uiState by viewModel.uiState.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     var showConnectionDialog by remember { mutableStateOf(connectionState.serverUrl.isEmpty()) }
     var showServerFoundDialog by remember { mutableStateOf(false) }
     var currentScreen by remember { mutableStateOf("home") }
+    var showProfileSelection by remember { mutableStateOf(!profileManager.hasProfile()) }
+    var showProfileManagement by remember { mutableStateOf(false) }
     var selectedMovie by remember { mutableStateOf<com.movielocal.client.data.models.Movie?>(null) }
     var selectedSeries by remember { mutableStateOf<com.movielocal.client.data.models.Series?>(null) }
     
@@ -127,6 +136,27 @@ fun MovieApp(
         )
     }
     
+    if (showProfileSelection) {
+        ProfileSelectionScreen(
+            onProfileSelected = { profile ->
+                profileManager.saveCurrentProfile(profile)
+                showProfileSelection = false
+            },
+            onManageProfiles = {
+                showProfileManagement = true
+            }
+        )
+    } else if (showProfileManagement) {
+        ProfileManagementScreen(
+            onBack = {
+                showProfileManagement = false
+                if (!profileManager.hasProfile()) {
+                    showProfileSelection = true
+                }
+            }
+        )
+    } else {
+    
     Scaffold(
         bottomBar = {
             if (currentScreen != "detail") {
@@ -170,8 +200,12 @@ fun MovieApp(
                     }
                 )
                 "profile" -> ProfileScreen(
-                    viewModel = viewModel,
-                    onOpenSettings = { showConnectionDialog = true }
+                    serverUrl = connectionState.serverUrl,
+                    onOpenSettings = { showConnectionDialog = true },
+                    onSwitchProfile = {
+                        profileManager.clearCurrentProfile()
+                        showProfileSelection = true
+                    }
                 )
                 "detail" -> com.movielocal.client.ui.screens.DetailScreen(
                     movie = selectedMovie,
@@ -182,5 +216,6 @@ fun MovieApp(
                 )
             }
         }
+    }
     }
 }

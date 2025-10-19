@@ -39,8 +39,4 @@ object RetrofitClient {
     fun getMovieApi(baseUrl: String): MovieApi {
         return getClient(baseUrl).create(MovieApi::class.java)
     }
-
-    fun getProfileApi(baseUrl: String): ProfileApi {
-        return getClient(baseUrl).create(ProfileApi::class.java)
-    }
 }

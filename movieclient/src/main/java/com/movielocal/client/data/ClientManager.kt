@@ -3,7 +3,6 @@ package com.movielocal.client.data
 import android.content.Context
 import android.os.Build
 import com.movielocal.client.data.repository.MovieRepository
-import com.movielocal.client.data.repository.ProfileRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -12,24 +11,20 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-class ClientManager(
-    private val context: Context, 
-    private val repository: MovieRepository,
-    private val profileRepository: ProfileRepository
-) {
+class ClientManager(private val context: Context, private val repository: MovieRepository) {
     
     private val prefs = context.getSharedPreferences("client_prefs", Context.MODE_PRIVATE)
     private var heartbeatJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO)
     
     val clientId: String
-        get() = profileRepository.getSelectedProfile()?.id ?: run {
+        get() {
             var id = prefs.getString("client_id", null)
             if (id == null) {
                 id = UUID.randomUUID().toString()
                 prefs.edit().putString("client_id", id).apply()
             }
-            id
+            return id
         }
     
     val deviceName: String

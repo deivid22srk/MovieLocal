@@ -7,13 +7,12 @@ import com.google.gson.Gson
 import com.movielocal.server.data.MediaDatabase
 import com.movielocal.server.data.MediaType
 import com.movielocal.server.data.ProgressDatabase
-import com.movielocal.server.data.ProfileDatabase
 import com.movielocal.server.data.VideoProgress
 import com.movielocal.server.data.ConnectedClientsManager
+import com.movielocal.server.data.ProfileDatabase
 import com.movielocal.server.models.ContentResponse
 import com.movielocal.server.models.Episode
 import com.movielocal.server.models.Movie
-import com.movielocal.server.models.Profile
 import com.movielocal.server.models.Season
 import com.movielocal.server.models.Series
 import fi.iki.elonen.NanoHTTPD
@@ -29,8 +28,8 @@ class MovieServer(
     private val gson = Gson()
     private val database = MediaDatabase(context)
     private val progressDatabase = ProgressDatabase(context)
-    private val profileDatabase = ProfileDatabase(context)
     private val clientsManager = ConnectedClientsManager(context)
+    private val profileDatabase = ProfileDatabase(context)
     private val moviesDir: File
     private val seriesDir: File
     private var serverIp: String = ""
@@ -101,6 +100,28 @@ class MovieServer(
             uri.startsWith("/api/thumbnail/") -> serveThumbnail(uri.removePrefix("/api/thumbnail/"))
             uri == "/api/health" -> serveHealth()
             uri == "/api/debug/permissions" -> serveDebugPermissions()
+            uri == "/api/profiles" && method == Method.GET -> getProfiles()
+            uri == "/api/profiles" && method == Method.POST -> createProfile(session)
+            uri.startsWith("/api/profiles/") && uri.contains("/progress") && method == Method.GET -> {
+                val profileId = uri.removePrefix("/api/profiles/").removeSuffix("/progress")
+                getProfileProgress(profileId)
+            }
+            uri.startsWith("/api/profiles/") && uri.contains("/progress") && method == Method.POST -> {
+                val profileId = uri.removePrefix("/api/profiles/").removeSuffix("/progress")
+                saveProfileProgress(session, profileId)
+            }
+            uri.startsWith("/api/profiles/") && uri.contains("/continue-watching") && method == Method.GET -> {
+                val profileId = uri.removePrefix("/api/profiles/").removeSuffix("/continue-watching")
+                getContinueWatching(profileId)
+            }
+            uri.startsWith("/api/profiles/") && method == Method.PUT -> {
+                val profileId = uri.removePrefix("/api/profiles/")
+                updateProfile(session, profileId)
+            }
+            uri.startsWith("/api/profiles/") && method == Method.DELETE -> {
+                val profileId = uri.removePrefix("/api/profiles/")
+                deleteProfile(profileId)
+            }
             uri == "/api/clients" && method == Method.GET -> getClients()
             uri == "/api/clients/register" && method == Method.POST -> registerClient(session)
             uri.startsWith("/api/clients/") && uri.endsWith("/heartbeat") && method == Method.POST -> {
@@ -123,8 +144,6 @@ class MovieServer(
                 val videoId = uri.removePrefix("/api/progress/")
                 saveProgress(session, videoId)
             }
-            uri == "/api/profiles" && method == Method.GET -> getProfiles()
-            uri == "/api/profiles" && method == Method.POST -> createProfile(session)
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
         }
         
@@ -588,32 +607,29 @@ class MovieServer(
             )
         }
     }
-
+    
     private fun getProfiles(): Response {
-        val profiles = profileDatabase.getProfiles()
+        val profiles = profileDatabase.getAllProfiles()
         return newFixedLengthResponse(
             Response.Status.OK,
             "application/json",
-            gson.toJson(profiles)
+            gson.toJson(mapOf("profiles" to profiles))
         )
     }
-
+    
     private fun createProfile(session: IHTTPSession): Response {
         return try {
             val bodyMap = mutableMapOf<String, String>()
             session.parseBody(bodyMap)
             val body = bodyMap["postData"] ?: ""
             
-            val profile = gson.fromJson(body, Profile::class.java)
-            
-            val profiles = profileDatabase.getProfiles().toMutableList()
-            profiles.add(profile)
-            profileDatabase.saveProfiles(profiles)
+            val profile = gson.fromJson(body, com.movielocal.server.models.Profile::class.java)
+            val createdProfile = profileDatabase.createProfile(profile)
             
             newFixedLengthResponse(
                 Response.Status.OK,
                 "application/json",
-                gson.toJson(mapOf("status" to "created"))
+                gson.toJson(createdProfile)
             )
         } catch (e: Exception) {
             newFixedLengthResponse(
@@ -622,5 +638,86 @@ class MovieServer(
                 gson.toJson(mapOf("error" to e.message))
             )
         }
+    }
+    
+    private fun updateProfile(session: IHTTPSession, profileId: String): Response {
+        return try {
+            val bodyMap = mutableMapOf<String, String>()
+            session.parseBody(bodyMap)
+            val body = bodyMap["postData"] ?: ""
+            
+            val profile = gson.fromJson(body, com.movielocal.server.models.Profile::class.java)
+            val updatedProfile = profileDatabase.updateProfile(profile)
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(updatedProfile)
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
+    }
+    
+    private fun deleteProfile(profileId: String): Response {
+        return try {
+            profileDatabase.deleteProfile(profileId)
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "deleted"))
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
+    }
+    
+    private fun getProfileProgress(profileId: String): Response {
+        val progress = profileDatabase.getProgressForProfile(profileId)
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            gson.toJson(mapOf("progress" to progress))
+        )
+    }
+    
+    private fun saveProfileProgress(session: IHTTPSession, profileId: String): Response {
+        return try {
+            val bodyMap = mutableMapOf<String, String>()
+            session.parseBody(bodyMap)
+            val body = bodyMap["postData"] ?: ""
+            
+            val progress = gson.fromJson(body, com.movielocal.server.models.WatchProgress::class.java)
+            profileDatabase.saveWatchProgress(progress)
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "saved"))
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
+    }
+    
+    private fun getContinueWatching(profileId: String): Response {
+        val continueWatching = profileDatabase.getContinueWatching(profileId)
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            gson.toJson(mapOf("continueWatching" to continueWatching))
+        )
     }
 }

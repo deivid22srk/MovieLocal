@@ -31,7 +31,6 @@ import com.movielocal.client.data.models.Season
 import com.movielocal.client.data.models.Episode
 import com.movielocal.client.data.models.VideoProgress
 import com.movielocal.client.ui.theme.iNoxBlue
-import com.movielocal.client.ui.viewmodel.MovieViewModel
 import com.movielocal.client.ui.viewmodel.UiState
 
 // ===== HOME SCREEN =====
@@ -845,113 +844,93 @@ fun SeriesSearchCard(
 // ===== PROFILE SCREEN =====
 @Composable
 fun ProfileScreen(
-    viewModel: MovieViewModel,
-    onOpenSettings: () -> Unit
+    serverUrl: String,
+    onOpenSettings: () -> Unit,
+    onSwitchProfile: () -> Unit = {}
 ) {
-    val profileState by viewModel.profileState.collectAsState()
-    var showDialog by remember { mutableStateOf(false) }
-    var newProfileName by remember { mutableStateOf("") }
-
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val profileManager = remember { com.movielocal.client.data.ProfileManager(context) }
+    val profileName = profileManager.getCurrentProfileName() ?: "MovieLocal User"
+    val profileAvatar = profileManager.getCurrentProfileAvatar() ?: "person"
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(20.dp)
     ) {
+        Spacer(Modifier.height(16.dp))
+        
         Text(
-            text = "Profiles",
+            text = "Profile",
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White
         )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(items = profileState.profiles, key = { it.id }) { profile ->
-                ProfileItem(profile = profile, isSelected = profile.id == profileState.selectedProfile?.id) {
-                    viewModel.selectProfile(profile)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Button(
-            onClick = { showDialog = true },
+        
+        Spacer(Modifier.height(32.dp))
+        
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(12.dp)
+                .size(100.dp)
+                .clip(RoundedCornerShape(50.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .align(Alignment.CenterHorizontally),
+            contentAlignment = Alignment.Center
         ) {
-            Text(text = "Add Profile")
-        }
-    }
-
-    if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text(text = "Create Profile") },
-            text = {
-                OutlinedTextField(
-                    value = newProfileName,
-                    onValueChange = { newProfileName = it },
-                    label = { Text("Profile Name") }
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.createProfile(newProfileName)
-                        newProfileName = ""
-                        showDialog = false
-                    }
-                ) {
-                    Text("Create")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-}
-
-@Composable
-fun ProfileItem(profile: com.movielocal.client.data.models.Profile, isSelected: Boolean, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            AsyncImage(
-                model = profile.avatarUrl,
-                contentDescription = profile.name,
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-            Text(
-                text = profile.name,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
+            Icon(
+                imageVector = getIconForAvatar(profileAvatar),
+                contentDescription = null,
+                modifier = Modifier.size(50.dp),
+                tint = iNoxBlue
             )
         }
+        
+        Spacer(Modifier.height(16.dp))
+        
+        Text(
+            text = profileName,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
+        
+        Spacer(Modifier.height(32.dp))
+        
+        ProfileOption(
+            icon = Icons.Default.SwapHoriz,
+            title = "Trocar Perfil",
+            subtitle = "Mudar para outro perfil",
+            onClick = onSwitchProfile
+        )
+        
+        ProfileOption(
+            icon = Icons.Default.Settings,
+            title = "Server Settings",
+            subtitle = serverUrl.ifEmpty { "Not connected" },
+            onClick = onOpenSettings
+        )
+        
+        ProfileOption(
+            icon = Icons.Default.Info,
+            title = "About",
+            subtitle = "MovieLocal v1.0",
+            onClick = {}
+        )
+        
+        ProfileOption(
+            icon = Icons.Default.Download,
+            title = "Downloads",
+            subtitle = "Manage your downloads",
+            onClick = {}
+        )
+        
+        ProfileOption(
+            icon = Icons.Default.Notifications,
+            title = "Notifications",
+            subtitle = "Manage notifications",
+            onClick = {}
+        )
     }
 }
 

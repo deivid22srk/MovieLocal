@@ -133,10 +133,49 @@ data class VideoProgress(
 data class Profile(
     @SerializedName("id")
     val id: String,
-
+    
     @SerializedName("name")
     val name: String,
+    
+    @SerializedName("avatarIcon")
+    val avatarIcon: String,
+    
+    @SerializedName("isKidsMode")
+    val isKidsMode: Boolean = false,
+    
+    @SerializedName("createdAt")
+    val createdAt: Long = System.currentTimeMillis()
+)
 
-    @SerializedName("avatarUrl")
-    val avatarUrl: String? = null
+data class WatchProgress(
+    @SerializedName("profileId")
+    val profileId: String,
+    
+    @SerializedName("contentId")
+    val contentId: String,
+    
+    @SerializedName("contentType")
+    val contentType: String,
+    
+    @SerializedName("progress")
+    val progress: Long,
+    
+    @SerializedName("duration")
+    val duration: Long,
+    
+    @SerializedName("lastWatched")
+    val lastWatched: Long = System.currentTimeMillis(),
+    
+    @SerializedName("completed")
+    val completed: Boolean = false
+)
+
+data class ProfilesResponse(
+    @SerializedName("profiles")
+    val profiles: List<Profile>
+)
+
+data class ContinueWatchingResponse(
+    @SerializedName("continueWatching")
+    val continueWatching: List<WatchProgress>
 )
