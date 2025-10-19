@@ -20,6 +20,7 @@ import com.movielocal.client.ui.screens.ProfileManagementScreen
 import com.movielocal.client.ui.screens.BottomNavigationBar
 import com.movielocal.client.ui.screens.ServerFoundDialog
 import com.movielocal.client.ui.screens.ConnectionDialog
+import com.movielocal.client.ui.screens.ChannelsScreen
 import com.movielocal.client.data.ProfileManager
 import androidx.compose.ui.platform.LocalContext
 import com.movielocal.client.ui.theme.MovieLocalTheme
@@ -61,6 +62,13 @@ class MainActivity : ComponentActivity() {
                                     putExtra("CURRENT_EPISODE", episode)
                                 })
                             }
+                        },
+                        onPlayChannel = { channelId, channelName ->
+                            startActivity(Intent(this, PlayerActivity::class.java).apply {
+                                putExtra("CHANNEL_ID", channelId)
+                                putExtra("VIDEO_TITLE", channelName)
+                                putExtra("IS_LIVE_CHANNEL", true)
+                            })
                         }
                     )
                 }
@@ -73,7 +81,8 @@ class MainActivity : ComponentActivity() {
 fun MovieApp(
     viewModel: MovieViewModel = viewModel(),
     onPlayMovie: (String, String, String) -> Unit,
-    onPlaySeries: (com.movielocal.client.data.models.Series, Int, Int) -> Unit
+    onPlaySeries: (com.movielocal.client.data.models.Series, Int, Int) -> Unit,
+    onPlayChannel: (String, String) -> Unit
 ) {
     val context = LocalContext.current
     val profileManager = remember { ProfileManager(context) }
@@ -216,6 +225,12 @@ fun MovieApp(
                         selectedSeries = series
                         selectedMovie = null
                         currentScreen = "detail"
+                    }
+                )
+                "channels" -> ChannelsScreen(
+                    viewModel = viewModel,
+                    onChannelClick = { channel ->
+                        onPlayChannel(channel.id, channel.name)
                     }
                 )
                 "profile" -> ProfileScreen(

@@ -124,4 +124,69 @@ class MovieRepository {
             Result.failure(e)
         }
     }
+    
+    suspend fun getChannels(): Result<List<com.movielocal.client.data.models.Channel>> = withContext(Dispatchers.IO) {
+        try {
+            val response = api?.getChannels()
+            if (response?.isSuccessful == true && response.body() != null) {
+                Result.success(response.body()!!.channels)
+            } else {
+                Result.failure(Exception("Failed to fetch channels"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun getChannel(channelId: String): Result<com.movielocal.client.data.models.Channel> = withContext(Dispatchers.IO) {
+        try {
+            val response = api?.getChannel(channelId)
+            if (response?.isSuccessful == true && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Failed to fetch channel"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun getChannelState(channelId: String): Result<com.movielocal.client.data.models.ChannelState> = withContext(Dispatchers.IO) {
+        try {
+            val response = api?.getChannelState(channelId)
+            if (response?.isSuccessful == true && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Failed to fetch channel state"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun startChannel(channelId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = api?.startChannel(channelId)
+            if (response?.isSuccessful == true) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to start channel"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun stopChannel(channelId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = api?.stopChannel(channelId)
+            if (response?.isSuccessful == true) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to stop channel"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

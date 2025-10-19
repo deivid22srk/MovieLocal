@@ -179,3 +179,54 @@ data class ContinueWatchingResponse(
     @SerializedName("continueWatching")
     val continueWatching: List<WatchProgress>
 )
+
+data class Channel(
+    @SerializedName("id")
+    val id: String,
+    
+    @SerializedName("name")
+    val name: String,
+    
+    @SerializedName("description")
+    val description: String,
+    
+    @SerializedName("thumbnailUrl")
+    val thumbnailUrl: String,
+    
+    @SerializedName("folderPaths")
+    val folderPaths: List<String>,
+    
+    @SerializedName("isActive")
+    val isActive: Boolean = false,
+    
+    @SerializedName("createdAt")
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class ChannelState(
+    @SerializedName("channelId")
+    val channelId: String,
+    
+    @SerializedName("currentVideoPath")
+    val currentVideoPath: String,
+    
+    @SerializedName("currentVideoUrl")
+    val currentVideoUrl: String,
+    
+    @SerializedName("currentVideoIndex")
+    val currentVideoIndex: Int,
+    
+    @SerializedName("currentPosition")
+    val currentPosition: Long,
+    
+    @SerializedName("totalVideos")
+    val totalVideos: Int,
+    
+    @SerializedName("lastUpdated")
+    val lastUpdated: Long = System.currentTimeMillis()
+)
+
+data class ChannelsResponse(
+    @SerializedName("channels")
+    val channels: List<Channel>
+)

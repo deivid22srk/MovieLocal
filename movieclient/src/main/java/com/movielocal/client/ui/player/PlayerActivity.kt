@@ -58,6 +58,9 @@ class PlayerActivity : ComponentActivity() {
     private var seriesData: Series? = null
     private var currentSeason: Int = 1
     private var currentEpisode: Int = 1
+    private var isLiveChannel: Boolean = false
+    private var channelId: String = ""
+    private var channelSyncJob: kotlinx.coroutines.Job? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,6 +85,8 @@ class PlayerActivity : ComponentActivity() {
         videoId = intent.getStringExtra("VIDEO_ID") ?: ""
         videoTitle = intent.getStringExtra("VIDEO_TITLE") ?: ""
         isSeries = intent.getBooleanExtra("IS_SERIES", false)
+        isLiveChannel = intent.getBooleanExtra("IS_LIVE_CHANNEL", false)
+        channelId = intent.getStringExtra("CHANNEL_ID") ?: ""
         
         if (isSeries) {
             val seriesJson = intent.getStringExtra("SERIES_DATA")
@@ -111,14 +116,22 @@ class PlayerActivity : ComponentActivity() {
                         series = seriesData,
                         currentSeason = currentSeason,
                         currentEpisode = currentEpisode,
+                        isLiveChannel = isLiveChannel,
+                        channelId = channelId,
                         repository = repository,
                         onBackPressed = { 
-                            saveCurrentProgress()
+                            if (!isLiveChannel) {
+                                saveCurrentProgress()
+                            }
                             finish() 
                         },
                         onPlayerReady = { exoPlayer ->
                             player = exoPlayer
-                            startProgressTracking()
+                            if (isLiveChannel) {
+                                startChannelSync()
+                            } else {
+                                startProgressTracking()
+                            }
                         },
                         onEnterPip = {
                             enterPipMode()
@@ -208,16 +221,53 @@ class PlayerActivity : ComponentActivity() {
         }
     }
     
+    private fun startChannelSync() {
+        channelSyncJob?.cancel()
+        channelSyncJob = lifecycleScope.launch {
+            while (true) {
+                try {
+                    repository.getChannelState(channelId).fold(
+                        onSuccess = { state ->
+                            player?.let { p ->
+                                val currentVideoUrl = p.currentMediaItem?.localConfiguration?.uri?.toString() ?: ""
+                                if (currentVideoUrl != state.currentVideoUrl) {
+                                    p.setMediaItem(MediaItem.fromUri(state.currentVideoUrl))
+                                    p.seekTo(state.currentPosition)
+                                    p.prepare()
+                                    p.play()
+                                } else {
+                                    val timeDiff = Math.abs(p.currentPosition - state.currentPosition)
+                                    if (timeDiff > 3000) {
+                                        p.seekTo(state.currentPosition)
+                                    }
+                                }
+                            }
+                        },
+                        onFailure = {
+                        }
+                    )
+                } catch (e: Exception) {
+                }
+                delay(5000)
+            }
+        }
+    }
+    
     override fun onStop() {
         super.onStop()
-        saveCurrentProgress()
+        if (!isLiveChannel) {
+            saveCurrentProgress()
+        }
         player?.pause()
     }
     
     override fun onDestroy() {
         super.onDestroy()
         progressJob?.cancel()
-        saveCurrentProgress()
+        channelSyncJob?.cancel()
+        if (!isLiveChannel) {
+            saveCurrentProgress()
+        }
         player?.release()
         player = null
     }
@@ -233,6 +283,8 @@ fun VideoPlayerScreen(
     series: Series?,
     currentSeason: Int,
     currentEpisode: Int,
+    isLiveChannel: Boolean = false,
+    channelId: String = "",
     repository: MovieRepository,
     onBackPressed: () -> Unit,
     onPlayerReady: (ExoPlayer) -> Unit,
@@ -251,16 +303,36 @@ fun VideoPlayerScreen(
     
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
-            val mediaItem = MediaItem.fromUri(videoUrl)
-            setMediaItem(mediaItem)
-            prepare()
+            if (!isLiveChannel) {
+                val mediaItem = MediaItem.fromUri(videoUrl)
+                setMediaItem(mediaItem)
+                prepare()
+            }
             playWhenReady = false
             onPlayerReady(this)
         }
     }
     
-    LaunchedEffect(videoId) {
-        if (videoId.isNotEmpty()) {
+    LaunchedEffect(videoId, channelId) {
+        if (isLiveChannel && channelId.isNotEmpty()) {
+            try {
+                repository.getChannelState(channelId).fold(
+                    onSuccess = { state ->
+                        val mediaItem = MediaItem.fromUri(state.currentVideoUrl)
+                        exoPlayer.setMediaItem(mediaItem)
+                        exoPlayer.seekTo(state.currentPosition)
+                        exoPlayer.prepare()
+                        exoPlayer.playWhenReady = true
+                        playerInitialized = true
+                    },
+                    onFailure = {
+                        playerInitialized = true
+                    }
+                )
+            } catch (e: Exception) {
+                playerInitialized = true
+            }
+        } else if (videoId.isNotEmpty()) {
             try {
                 val result = repository.getProgress(videoId)
                 if (result.isSuccess) {
@@ -334,11 +406,30 @@ fun VideoPlayerScreen(
         if (showControls) {
             TopAppBar(
                 title = { 
-                    Text(
-                        videoTitle, 
-                        color = Color.White,
-                        maxLines = 1
-                    ) 
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isLiveChannel) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color.Red
+                            ) {
+                                Text(
+                                    text = "AO VIVO",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            videoTitle, 
+                            color = Color.White,
+                            maxLines = 1
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackPressed) {

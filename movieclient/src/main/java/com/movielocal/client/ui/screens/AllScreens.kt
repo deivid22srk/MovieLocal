@@ -1042,6 +1042,26 @@ fun BottomNavigationBar(
         NavigationBarItem(
             icon = {
                 Icon(
+                    if (currentScreen == "channels") Icons.Filled.Tv else Icons.Filled.Tv,
+                    "Canais",
+                    modifier = Modifier.size(26.dp)
+                )
+            },
+            label = { Text("Canais", fontSize = 12.sp) },
+            selected = currentScreen == "channels",
+            onClick = { onNavigate("channels") },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = iNoxBlue,
+                selectedTextColor = iNoxBlue,
+                indicatorColor = Color.Transparent,
+                unselectedIconColor = Color.Gray,
+                unselectedTextColor = Color.Gray
+            )
+        )
+        
+        NavigationBarItem(
+            icon = {
+                Icon(
                     if (currentScreen == "profile") Icons.Filled.Person else Icons.Filled.Person,
                     "Profile",
                     modifier = Modifier.size(26.dp)

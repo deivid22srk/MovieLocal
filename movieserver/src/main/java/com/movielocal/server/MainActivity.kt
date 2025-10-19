@@ -31,6 +31,7 @@ import com.movielocal.server.ui.theme.MovieLocalTheme
 import com.movielocal.server.ui.media.MediaManagementScreen
 import com.movielocal.server.ui.settings.SettingsScreen
 import com.movielocal.server.ui.clients.ConnectedClientsScreen
+import com.movielocal.server.ui.channels.ChannelsScreen
 import com.movielocal.server.data.ConnectedClientsManager
 
 class MainActivity : ComponentActivity() {
@@ -84,7 +85,8 @@ class MainActivity : ComponentActivity() {
                             getServerUrl = { getServerUrl() },
                             onNavigateToMedia = { currentScreen = "media" },
                             onNavigateToSettings = { currentScreen = "settings" },
-                            onNavigateToClients = { currentScreen = "clients" }
+                            onNavigateToClients = { currentScreen = "clients" },
+                            onNavigateToChannels = { currentScreen = "channels" }
                         )
                         "media" -> MediaManagementScreen(
                             onBack = { currentScreen = "main" }
@@ -94,6 +96,9 @@ class MainActivity : ComponentActivity() {
                         )
                         "clients" -> ConnectedClientsScreen(
                             clientsManager = clientsManager,
+                            onBack = { currentScreen = "main" }
+                        )
+                        "channels" -> ChannelsScreen(
                             onBack = { currentScreen = "main" }
                         )
                     }
@@ -169,7 +174,8 @@ fun ServerScreen(
     getServerUrl: () -> String,
     onNavigateToMedia: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToClients: () -> Unit
+    onNavigateToClients: () -> Unit,
+    onNavigateToChannels: () -> Unit
 ) {
     var serverRunning by remember { mutableStateOf(false) }
     
@@ -185,6 +191,9 @@ fun ServerScreen(
             LargeTopAppBar(
                 title = { Text("Movie Server") },
                 actions = {
+                    IconButton(onClick = onNavigateToChannels) {
+                        Icon(Icons.Default.Tv, "Canais")
+                    }
                     IconButton(onClick = onNavigateToClients) {
                         Icon(Icons.Default.Devices, "Clientes Conectados")
                     }
@@ -238,6 +247,20 @@ fun ServerScreen(
             }
             
             if (serverRunning) {
+                OutlinedButton(
+                    onClick = onNavigateToChannels,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tv,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text("Gerenciar Canais ao Vivo")
+                }
+                
                 OutlinedButton(
                     onClick = onNavigateToClients,
                     modifier = Modifier

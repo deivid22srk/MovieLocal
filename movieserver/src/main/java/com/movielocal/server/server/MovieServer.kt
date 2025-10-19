@@ -10,11 +10,13 @@ import com.movielocal.server.data.ProgressDatabase
 import com.movielocal.server.data.VideoProgress
 import com.movielocal.server.data.ConnectedClientsManager
 import com.movielocal.server.data.ProfileDatabase
+import com.movielocal.server.data.ChannelDatabase
 import com.movielocal.server.models.ContentResponse
 import com.movielocal.server.models.Episode
 import com.movielocal.server.models.Movie
 import com.movielocal.server.models.Season
 import com.movielocal.server.models.Series
+import com.movielocal.server.models.Channel
 import fi.iki.elonen.NanoHTTPD
 import java.io.File
 import java.io.FileInputStream
@@ -30,6 +32,8 @@ class MovieServer(
     private val progressDatabase = ProgressDatabase(context)
     private val clientsManager = ConnectedClientsManager(context)
     private val profileDatabase = ProfileDatabase(context)
+    private val channelDatabase = ChannelDatabase(context)
+    private val channelStreamer = ChannelStreamer(context)
     private val moviesDir: File
     private val seriesDir: File
     private var serverIp: String = ""
@@ -143,6 +147,28 @@ class MovieServer(
             uri.startsWith("/api/progress/") && method == Method.POST -> {
                 val videoId = uri.removePrefix("/api/progress/")
                 saveProgress(session, videoId)
+            }
+            uri == "/api/channels" && method == Method.GET -> getChannels()
+            uri == "/api/channels" && method == Method.POST -> createChannel(session)
+            uri.startsWith("/api/channels/") && uri.endsWith("/start") && method == Method.POST -> {
+                val channelId = uri.removePrefix("/api/channels/").removeSuffix("/start")
+                startChannel(channelId)
+            }
+            uri.startsWith("/api/channels/") && uri.endsWith("/stop") && method == Method.POST -> {
+                val channelId = uri.removePrefix("/api/channels/").removeSuffix("/stop")
+                stopChannel(channelId)
+            }
+            uri.startsWith("/api/channels/") && uri.endsWith("/state") && method == Method.GET -> {
+                val channelId = uri.removePrefix("/api/channels/").removeSuffix("/state")
+                getChannelState(channelId)
+            }
+            uri.startsWith("/api/channels/") && uri.endsWith("/delete") && method == Method.DELETE -> {
+                val channelId = uri.removePrefix("/api/channels/").removeSuffix("/delete")
+                deleteChannel(channelId)
+            }
+            uri.startsWith("/api/channels/") && method == Method.GET -> {
+                val channelId = uri.removePrefix("/api/channels/")
+                getChannel(channelId)
             }
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
         }
@@ -719,5 +745,178 @@ class MovieServer(
             "application/json",
             gson.toJson(mapOf("continueWatching" to continueWatching))
         )
+    }
+    
+    private fun getChannels(): Response {
+        val channels = channelDatabase.getAllChannels().map { channel ->
+            mapOf(
+                "id" to channel.id,
+                "name" to channel.name,
+                "description" to channel.description,
+                "thumbnailUrl" to if (channel.thumbnailUrl.isNotEmpty()) {
+                    "http://$serverIp:8080/api/thumbnail/${channel.thumbnailUrl}"
+                } else {
+                    ""
+                },
+                "folderPaths" to channel.folderPaths,
+                "isActive" to channelStreamer.isChannelActive(channel.id),
+                "createdAt" to channel.createdAt
+            )
+        }
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            gson.toJson(mapOf("channels" to channels))
+        )
+    }
+    
+    private fun getChannel(channelId: String): Response {
+        val channel = channelDatabase.getChannel(channelId)
+        return if (channel != null) {
+            val responseMap = mapOf(
+                "id" to channel.id,
+                "name" to channel.name,
+                "description" to channel.description,
+                "thumbnailUrl" to if (channel.thumbnailUrl.isNotEmpty()) {
+                    "http://$serverIp:8080/api/thumbnail/${channel.thumbnailUrl}"
+                } else {
+                    ""
+                },
+                "folderPaths" to channel.folderPaths,
+                "isActive" to channelStreamer.isChannelActive(channel.id),
+                "createdAt" to channel.createdAt
+            )
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(responseMap)
+            )
+        } else {
+            newFixedLengthResponse(
+                Response.Status.NOT_FOUND,
+                "application/json",
+                gson.toJson(mapOf("error" to "Channel not found"))
+            )
+        }
+    }
+    
+    private fun createChannel(session: IHTTPSession): Response {
+        return try {
+            val bodyMap = mutableMapOf<String, String>()
+            session.parseBody(bodyMap)
+            val body = bodyMap["postData"] ?: ""
+            
+            val channel = gson.fromJson(body, Channel::class.java)
+            channelDatabase.saveChannel(channel)
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "created", "channelId" to channel.id))
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
+    }
+    
+    private fun startChannel(channelId: String): Response {
+        return try {
+            val channel = channelDatabase.getChannel(channelId)
+            if (channel != null) {
+                channelStreamer.startChannel(channel)
+                val updatedChannel = channel.copy(isActive = true)
+                channelDatabase.saveChannel(updatedChannel)
+                
+                newFixedLengthResponse(
+                    Response.Status.OK,
+                    "application/json",
+                    gson.toJson(mapOf("status" to "started"))
+                )
+            } else {
+                newFixedLengthResponse(
+                    Response.Status.NOT_FOUND,
+                    "application/json",
+                    gson.toJson(mapOf("error" to "Channel not found"))
+                )
+            }
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
+    }
+    
+    private fun stopChannel(channelId: String): Response {
+        return try {
+            channelStreamer.stopChannel(channelId)
+            val channel = channelDatabase.getChannel(channelId)
+            if (channel != null) {
+                val updatedChannel = channel.copy(isActive = false)
+                channelDatabase.saveChannel(updatedChannel)
+            }
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "stopped"))
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
+    }
+    
+    private fun getChannelState(channelId: String): Response {
+        val state = channelStreamer.getChannelState(channelId)
+        return if (state != null) {
+            val responseMap = mapOf(
+                "channelId" to state.channelId,
+                "currentVideoPath" to state.currentVideoPath,
+                "currentVideoUrl" to "http://$serverIp:8080/api/stream/${state.currentVideoPath}",
+                "currentVideoIndex" to state.currentVideoIndex,
+                "currentPosition" to state.currentPosition,
+                "totalVideos" to state.allVideoPaths.size,
+                "lastUpdated" to state.lastUpdated
+            )
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(responseMap)
+            )
+        } else {
+            newFixedLengthResponse(
+                Response.Status.NOT_FOUND,
+                "application/json",
+                gson.toJson(mapOf("error" to "Channel not active or not found"))
+            )
+        }
+    }
+    
+    private fun deleteChannel(channelId: String): Response {
+        return try {
+            channelStreamer.stopChannel(channelId)
+            channelDatabase.deleteChannel(channelId)
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "deleted"))
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
     }
 }

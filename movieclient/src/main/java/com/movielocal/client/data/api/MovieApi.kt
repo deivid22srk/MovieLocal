@@ -7,6 +7,9 @@ import com.movielocal.client.data.models.Profile
 import com.movielocal.client.data.models.ProfilesResponse
 import com.movielocal.client.data.models.WatchProgress
 import com.movielocal.client.data.models.ContinueWatchingResponse
+import com.movielocal.client.data.models.ChannelsResponse
+import com.movielocal.client.data.models.Channel
+import com.movielocal.client.data.models.ChannelState
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -70,4 +73,19 @@ interface MovieApi {
         @Path("profileId") profileId: String,
         @Body progress: WatchProgress
     ): Response<Map<String, String>>
+    
+    @GET("/api/channels")
+    suspend fun getChannels(): Response<ChannelsResponse>
+    
+    @GET("/api/channels/{channelId}")
+    suspend fun getChannel(@Path("channelId") channelId: String): Response<Channel>
+    
+    @GET("/api/channels/{channelId}/state")
+    suspend fun getChannelState(@Path("channelId") channelId: String): Response<ChannelState>
+    
+    @POST("/api/channels/{channelId}/start")
+    suspend fun startChannel(@Path("channelId") channelId: String): Response<Map<String, String>>
+    
+    @POST("/api/channels/{channelId}/stop")
+    suspend fun stopChannel(@Path("channelId") channelId: String): Response<Map<String, String>>
 }
