@@ -31,6 +31,10 @@ fun ProfileManagementScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val serverUrl = remember { 
+        context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("server_url", "") ?: ""
+    }
     
     var profiles by remember { mutableStateOf<List<Profile>>(emptyList()) }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -42,8 +46,8 @@ fun ProfileManagementScreen(
     fun loadProfiles() {
         scope.launch {
             try {
-                val api = RetrofitClient.getApi()
-                if (api != null) {
+                if (serverUrl.isNotEmpty()) {
+                    val api = RetrofitClient.getMovieApi("http://$serverUrl")
                     val response = api.getProfiles()
                     if (response.isSuccessful && response.body() != null) {
                         profiles = response.body()!!.profiles
@@ -119,8 +123,8 @@ fun ProfileManagementScreen(
             onSave = { profile ->
                 scope.launch {
                     try {
-                        val api = RetrofitClient.getApi()
-                        if (api != null) {
+                        if (serverUrl.isNotEmpty()) {
+                            val api = RetrofitClient.getMovieApi("http://$serverUrl")
                             val response = api.createProfile(profile)
                             if (response.isSuccessful) {
                                 loadProfiles()
@@ -142,8 +146,8 @@ fun ProfileManagementScreen(
             onSave = { profile ->
                 scope.launch {
                     try {
-                        val api = RetrofitClient.getApi()
-                        if (api != null) {
+                        if (serverUrl.isNotEmpty()) {
+                            val api = RetrofitClient.getMovieApi("http://$serverUrl")
                             val response = api.updateProfile(profile.id, profile)
                             if (response.isSuccessful) {
                                 loadProfiles()
@@ -168,8 +172,8 @@ fun ProfileManagementScreen(
                     onClick = {
                         scope.launch {
                             try {
-                                val api = RetrofitClient.getApi()
-                                if (api != null) {
+                                if (serverUrl.isNotEmpty()) {
+                                    val api = RetrofitClient.getMovieApi("http://$serverUrl")
                                     val response = api.deleteProfile(selectedProfile!!.id)
                                     if (response.isSuccessful) {
                                         loadProfiles()

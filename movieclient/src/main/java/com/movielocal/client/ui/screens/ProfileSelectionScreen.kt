@@ -34,6 +34,10 @@ fun ProfileSelectionScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val profileManager = remember { ProfileManager(context) }
+    val serverUrl = remember { 
+        context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("server_url", "") ?: ""
+    }
     
     var profiles by remember { mutableStateOf<List<Profile>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -42,8 +46,8 @@ fun ProfileSelectionScreen(
     LaunchedEffect(Unit) {
         scope.launch {
             try {
-                val api = RetrofitClient.getApi()
-                if (api != null) {
+                if (serverUrl.isNotEmpty()) {
+                    val api = RetrofitClient.getMovieApi("http://$serverUrl")
                     val response = api.getProfiles()
                     if (response.isSuccessful && response.body() != null) {
                         profiles = response.body()!!.profiles
