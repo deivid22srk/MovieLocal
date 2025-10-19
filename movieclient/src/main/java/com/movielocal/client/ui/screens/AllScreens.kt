@@ -31,6 +31,7 @@ import com.movielocal.client.data.models.Season
 import com.movielocal.client.data.models.Episode
 import com.movielocal.client.data.models.VideoProgress
 import com.movielocal.client.ui.theme.iNoxBlue
+import com.movielocal.client.ui.viewmodel.MovieViewModel
 import com.movielocal.client.ui.viewmodel.UiState
 
 // ===== HOME SCREEN =====
@@ -867,7 +868,7 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(profileState.profiles) { profile ->
+            items(items = profileState.profiles, key = { it.id }) { profile ->
                 ProfileItem(profile = profile, isSelected = profile.id == profileState.selectedProfile?.id) {
                     viewModel.selectProfile(profile)
                 }
