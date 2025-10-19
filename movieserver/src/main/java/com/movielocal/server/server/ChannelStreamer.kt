@@ -55,7 +55,7 @@ class ChannelStreamer(private val context: Context) {
         return streamingJobs.containsKey(channelId)
     }
     
-    private suspend fun streamChannel(channel: Channel, videoPaths: List<String>) {
+    private suspend fun streamChannel(channel: Channel, videoPaths: List<String>) = coroutineScope {
         var currentIndex = 0
         
         while (isActive) {
