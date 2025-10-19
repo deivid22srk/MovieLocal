@@ -1,6 +1,5 @@
 package com.movielocal.server.ui.channels
 
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.movielocal.server.data.ChannelDatabase
@@ -258,19 +258,8 @@ fun AddChannelDialog(
     var description by remember { mutableStateOf("") }
     var selectedFolders by remember { mutableStateOf<List<String>>(emptyList()) }
     var thumbnailUri by remember { mutableStateOf<Uri?>(null) }
+    var showFolderSelector by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    
-    val folderPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        uri?.let {
-            context.contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            selectedFolders = selectedFolders + it.toString()
-        }
-    }
     
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -278,87 +267,140 @@ fun AddChannelDialog(
         thumbnailUri = uri
     }
     
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Novo Canal") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nome do Canal") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Descrição") },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3
-                )
-                
-                Button(
-                    onClick = { imagePicker.launch("image/*") },
+    if (showFolderSelector) {
+        FolderSelectorScreen(
+            onFoldersSelected = { folders ->
+                selectedFolders = folders
+                showFolderSelector = false
+            },
+            onDismiss = { showFolderSelector = false }
+        )
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Novo Canal") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Image, null, Modifier.padding(end = 8.dp))
-                    Text("Selecionar Imagem")
-                }
-                
-                thumbnailUri?.let {
-                    Text("Imagem selecionada: ✓", color = MaterialTheme.colorScheme.primary)
-                }
-                
-                Button(
-                    onClick = { folderPicker.launch(null) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Folder, null, Modifier.padding(end = 8.dp))
-                    Text("Adicionar Pasta de Vídeos")
-                }
-                
-                if (selectedFolders.isNotEmpty()) {
-                    Text(
-                        text = "${selectedFolders.size} pasta(s) selecionada(s)",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Nome do Canal") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
+                    
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Descrição") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        minLines = 2
+                    )
+                    
+                    Button(
+                        onClick = { imagePicker.launch("image/*") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Image, null, Modifier.padding(end = 8.dp))
+                        Text("Selecionar Imagem")
+                    }
+                    
+                    thumbnailUri?.let {
+                        Text("Imagem selecionada: ✓", color = MaterialTheme.colorScheme.primary)
+                    }
+                    
+                    Button(
+                        onClick = { showFolderSelector = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.FolderOpen, null, Modifier.padding(end = 8.dp))
+                        Text("Selecionar Pastas de Vídeos")
+                    }
+                    
+                    if (selectedFolders.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${selectedFolders.size} pasta(s) selecionada(s)",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    TextButton(
+                                        onClick = { selectedFolders = emptyList() }
+                                    ) {
+                                        Text("Limpar")
+                                    }
+                                }
+                                
+                                selectedFolders.take(3).forEach { path ->
+                                    Text(
+                                        text = "• ${File(path).name}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                                
+                                if (selectedFolders.size > 3) {
+                                    Text(
+                                        text = "... e mais ${selectedFolders.size - 3} pasta(s)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (name.isNotBlank() && selectedFolders.isNotEmpty()) {
+                            val channelId = UUID.randomUUID().toString()
+                            val thumbnailPath = thumbnailUri?.let {
+                                ChannelDatabase(context).saveThumbnailImage(it, channelId)
+                            } ?: ""
+                            
+                            val channel = Channel(
+                                id = channelId,
+                                name = name,
+                                description = description,
+                                thumbnailUrl = thumbnailPath,
+                                folderPaths = selectedFolders
+                            )
+                            onSave(channel)
+                        }
+                    },
+                    enabled = name.isNotBlank() && selectedFolders.isNotEmpty()
+                ) {
+                    Text("Criar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancelar")
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank() && selectedFolders.isNotEmpty()) {
-                        val channelId = UUID.randomUUID().toString()
-                        val thumbnailPath = thumbnailUri?.let {
-                            ChannelDatabase(context).saveThumbnailImage(it, channelId)
-                        } ?: ""
-                        
-                        val channel = Channel(
-                            id = channelId,
-                            name = name,
-                            description = description,
-                            thumbnailUrl = thumbnailPath,
-                            folderPaths = selectedFolders
-                        )
-                        onSave(channel)
-                    }
-                },
-                enabled = name.isNotBlank() && selectedFolders.isNotEmpty()
-            ) {
-                Text("Criar")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar")
-            }
-        }
-    )
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -372,19 +414,8 @@ fun EditChannelDialog(
     var description by remember { mutableStateOf(channel.description) }
     var selectedFolders by remember { mutableStateOf(channel.folderPaths) }
     var thumbnailUri by remember { mutableStateOf<Uri?>(null) }
+    var showFolderSelector by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    
-    val folderPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        uri?.let {
-            context.contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            selectedFolders = selectedFolders + it.toString()
-        }
-    }
     
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -392,90 +423,136 @@ fun EditChannelDialog(
         thumbnailUri = uri
     }
     
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Editar Canal") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nome do Canal") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Descrição") },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3
-                )
-                
-                Button(
-                    onClick = { imagePicker.launch("image/*") },
+    if (showFolderSelector) {
+        FolderSelectorScreen(
+            onFoldersSelected = { folders ->
+                selectedFolders = folders
+                showFolderSelector = false
+            },
+            onDismiss = { showFolderSelector = false }
+        )
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Editar Canal") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Image, null, Modifier.padding(end = 8.dp))
-                    Text("Alterar Imagem")
-                }
-                
-                thumbnailUri?.let {
-                    Text("Nova imagem selecionada: ✓", color = MaterialTheme.colorScheme.primary)
-                }
-                
-                Button(
-                    onClick = { folderPicker.launch(null) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Folder, null, Modifier.padding(end = 8.dp))
-                    Text("Adicionar Pasta de Vídeos")
-                }
-                
-                Text(
-                    text = "${selectedFolders.size} pasta(s) selecionada(s)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                
-                if (selectedFolders.size > 1) {
-                    TextButton(
-                        onClick = { selectedFolders = emptyList() },
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Nome do Canal") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Descrição") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        minLines = 2
+                    )
+                    
+                    Button(
+                        onClick = { imagePicker.launch("image/*") },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Limpar Todas as Pastas")
+                        Icon(Icons.Default.Image, null, Modifier.padding(end = 8.dp))
+                        Text("Alterar Imagem")
+                    }
+                    
+                    thumbnailUri?.let {
+                        Text("Nova imagem selecionada: ✓", color = MaterialTheme.colorScheme.primary)
+                    }
+                    
+                    Button(
+                        onClick = { showFolderSelector = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.FolderOpen, null, Modifier.padding(end = 8.dp))
+                        Text("Selecionar Pastas de Vídeos")
+                    }
+                    
+                    if (selectedFolders.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${selectedFolders.size} pasta(s) selecionada(s)",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    TextButton(
+                                        onClick = { selectedFolders = emptyList() }
+                                    ) {
+                                        Text("Limpar")
+                                    }
+                                }
+                                
+                                selectedFolders.take(3).forEach { path ->
+                                    Text(
+                                        text = "• ${File(path).name}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                                
+                                if (selectedFolders.size > 3) {
+                                    Text(
+                                        text = "... e mais ${selectedFolders.size - 3} pasta(s)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (name.isNotBlank() && selectedFolders.isNotEmpty()) {
+                            val thumbnailPath = thumbnailUri?.let {
+                                ChannelDatabase(context).saveThumbnailImage(it, channel.id)
+                            } ?: channel.thumbnailUrl
+                            
+                            val updatedChannel = channel.copy(
+                                name = name,
+                                description = description,
+                                thumbnailUrl = thumbnailPath,
+                                folderPaths = selectedFolders
+                            )
+                            onSave(updatedChannel)
+                        }
+                    },
+                    enabled = name.isNotBlank() && selectedFolders.isNotEmpty()
+                ) {
+                    Text("Salvar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancelar")
+                }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank() && selectedFolders.isNotEmpty()) {
-                        val thumbnailPath = thumbnailUri?.let {
-                            ChannelDatabase(context).saveThumbnailImage(it, channel.id)
-                        } ?: channel.thumbnailUrl
-                        
-                        val updatedChannel = channel.copy(
-                            name = name,
-                            description = description,
-                            thumbnailUrl = thumbnailPath,
-                            folderPaths = selectedFolders
-                        )
-                        onSave(updatedChannel)
-                    }
-                },
-                enabled = name.isNotBlank() && selectedFolders.isNotEmpty()
-            ) {
-                Text("Salvar")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar")
-            }
-        }
-    )
+        )
+    }
 }

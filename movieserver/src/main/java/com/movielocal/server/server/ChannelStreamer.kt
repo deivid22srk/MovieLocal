@@ -2,11 +2,10 @@ package com.movielocal.server.server
 
 import android.content.Context
 import android.media.MediaMetadataRetriever
-import android.net.Uri
-import androidx.documentfile.provider.DocumentFile
 import com.movielocal.server.models.Channel
 import com.movielocal.server.models.ChannelState
 import kotlinx.coroutines.*
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 class ChannelStreamer(private val context: Context) {
@@ -98,17 +97,9 @@ class ChannelStreamer(private val context: Context) {
         val videos = mutableListOf<String>()
         
         try {
-            if (folderPath.startsWith("content://")) {
-                val uri = Uri.parse(folderPath)
-                val documentFile = DocumentFile.fromTreeUri(context, uri)
-                documentFile?.let { folder ->
-                    collectVideosRecursive(folder, videos)
-                }
-            } else {
-                val folder = java.io.File(folderPath)
-                if (folder.exists() && folder.isDirectory) {
-                    collectVideosFromFileSystem(folder, videos)
-                }
+            val folder = File(folderPath)
+            if (folder.exists() && folder.isDirectory) {
+                collectVideosFromFileSystem(folder, videos)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -117,17 +108,7 @@ class ChannelStreamer(private val context: Context) {
         return videos
     }
     
-    private fun collectVideosRecursive(folder: DocumentFile, videos: MutableList<String>) {
-        folder.listFiles().forEach { file ->
-            if (file.isDirectory) {
-                collectVideosRecursive(file, videos)
-            } else if (file.isFile && isVideoFile(file.name ?: "")) {
-                videos.add(file.uri.toString())
-            }
-        }
-    }
-    
-    private fun collectVideosFromFileSystem(folder: java.io.File, videos: MutableList<String>) {
+    private fun collectVideosFromFileSystem(folder: File, videos: MutableList<String>) {
         folder.listFiles()?.forEach { file ->
             if (file.isDirectory) {
                 collectVideosFromFileSystem(file, videos)
@@ -145,12 +126,7 @@ class ChannelStreamer(private val context: Context) {
     private fun getVideoDuration(videoPath: String): Long {
         return try {
             val retriever = MediaMetadataRetriever()
-            
-            if (videoPath.startsWith("content://")) {
-                retriever.setDataSource(context, Uri.parse(videoPath))
-            } else {
-                retriever.setDataSource(videoPath)
-            }
+            retriever.setDataSource(videoPath)
             
             val durationStr = retriever.extractMetadata(
                 MediaMetadataRetriever.METADATA_KEY_DURATION
