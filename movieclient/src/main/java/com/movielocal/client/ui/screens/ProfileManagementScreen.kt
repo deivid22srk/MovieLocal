@@ -42,19 +42,30 @@ fun ProfileManagementScreen(
     var selectedProfile by remember { mutableStateOf<Profile?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
     
     fun loadProfiles() {
+        isLoading = true
         scope.launch {
             try {
                 if (serverUrl.isNotEmpty()) {
                     val baseUrl = if (serverUrl.startsWith("http")) serverUrl else "http://$serverUrl"
+                    android.util.Log.d("ProfileManagement", "Loading profiles from: $baseUrl")
                     val api = RetrofitClient.getMovieApi(baseUrl)
                     val response = api.getProfiles()
+                    android.util.Log.d("ProfileManagement", "Response: ${response.code()}")
                     if (response.isSuccessful && response.body() != null) {
                         profiles = response.body()!!.profiles
+                        android.util.Log.d("ProfileManagement", "Loaded ${profiles.size} profiles")
+                    } else {
+                        statusMessage = "Erro ao carregar perfis: ${response.code()}"
                     }
+                } else {
+                    statusMessage = "Servidor não configurado"
                 }
             } catch (e: Exception) {
+                statusMessage = "Erro: ${e.message}"
+                android.util.Log.e("ProfileManagement", "Error loading profiles", e)
                 e.printStackTrace()
             } finally {
                 isLoading = false
@@ -66,7 +77,17 @@ fun ProfileManagementScreen(
         loadProfiles()
     }
     
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    LaunchedEffect(statusMessage) {
+        statusMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            statusMessage = null
+        }
+    }
+    
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Gerenciar Perfis") },
@@ -113,6 +134,23 @@ fun ProfileManagementScreen(
                         }
                     )
                 }
+                
+                if (profiles.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Nenhum perfil cadastrado",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -124,16 +162,25 @@ fun ProfileManagementScreen(
             onSave = { profile ->
                 scope.launch {
                     try {
+                        android.util.Log.d("ProfileManagement", "Creating profile: ${profile.name}")
                         if (serverUrl.isNotEmpty()) {
                             val baseUrl = if (serverUrl.startsWith("http")) serverUrl else "http://$serverUrl"
                             val api = RetrofitClient.getMovieApi(baseUrl)
+                            android.util.Log.d("ProfileManagement", "API call to: $baseUrl/api/profiles")
                             val response = api.createProfile(profile)
+                            android.util.Log.d("ProfileManagement", "Response code: ${response.code()}")
                             if (response.isSuccessful) {
-                                loadProfiles()
+                                statusMessage = "Perfil criado com sucesso!"
                                 showAddDialog = false
+                                loadProfiles()
+                            } else {
+                                statusMessage = "Erro ao criar perfil: ${response.code()}"
+                                android.util.Log.e("ProfileManagement", "Error response: ${response.errorBody()?.string()}")
                             }
                         }
                     } catch (e: Exception) {
+                        statusMessage = "Erro: ${e.message}"
+                        android.util.Log.e("ProfileManagement", "Exception creating profile", e)
                         e.printStackTrace()
                     }
                 }
@@ -148,16 +195,24 @@ fun ProfileManagementScreen(
             onSave = { profile ->
                 scope.launch {
                     try {
+                        android.util.Log.d("ProfileManagement", "Updating profile: ${profile.id} - ${profile.name}")
                         if (serverUrl.isNotEmpty()) {
                             val baseUrl = if (serverUrl.startsWith("http")) serverUrl else "http://$serverUrl"
                             val api = RetrofitClient.getMovieApi(baseUrl)
                             val response = api.updateProfile(profile.id, profile)
+                            android.util.Log.d("ProfileManagement", "Update response code: ${response.code()}")
                             if (response.isSuccessful) {
-                                loadProfiles()
+                                statusMessage = "Perfil atualizado com sucesso!"
                                 showEditDialog = false
+                                loadProfiles()
+                            } else {
+                                statusMessage = "Erro ao atualizar perfil: ${response.code()}"
+                                android.util.Log.e("ProfileManagement", "Error response: ${response.errorBody()?.string()}")
                             }
                         }
                     } catch (e: Exception) {
+                        statusMessage = "Erro: ${e.message}"
+                        android.util.Log.e("ProfileManagement", "Exception updating profile", e)
                         e.printStackTrace()
                     }
                 }
@@ -180,11 +235,15 @@ fun ProfileManagementScreen(
                                     val api = RetrofitClient.getMovieApi(baseUrl)
                                     val response = api.deleteProfile(selectedProfile!!.id)
                                     if (response.isSuccessful) {
-                                        loadProfiles()
+                                        statusMessage = "Perfil excluído com sucesso!"
                                         showDeleteDialog = false
+                                        loadProfiles()
+                                    } else {
+                                        statusMessage = "Erro ao excluir perfil"
                                     }
                                 }
                             } catch (e: Exception) {
+                                statusMessage = "Erro: ${e.message}"
                                 e.printStackTrace()
                             }
                         }
@@ -358,6 +417,8 @@ fun ProfileEditDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    android.util.Log.d("ProfileEditDialog", "Save button clicked!")
+                    android.util.Log.d("ProfileEditDialog", "Profile name: $name")
                     val newProfile = Profile(
                         id = profile?.id ?: UUID.randomUUID().toString(),
                         name = name,
@@ -365,6 +426,7 @@ fun ProfileEditDialog(
                         isKidsMode = isKidsMode,
                         createdAt = profile?.createdAt ?: System.currentTimeMillis()
                     )
+                    android.util.Log.d("ProfileEditDialog", "Calling onSave with profile: $newProfile")
                     onSave(newProfile)
                 },
                 enabled = name.isNotBlank()

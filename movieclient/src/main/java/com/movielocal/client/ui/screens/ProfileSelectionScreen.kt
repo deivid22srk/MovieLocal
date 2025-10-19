@@ -138,7 +138,10 @@ fun ProfileSelectionScreen(
                         }
                         
                         item {
-                            AddProfileCard(onClick = onManageProfiles)
+                            AddProfileCard(onClick = {
+                                android.util.Log.d("ProfileSelection", "Add profile clicked!")
+                                onManageProfiles()
+                            })
                         }
                     }
                 }
@@ -148,7 +151,10 @@ fun ProfileSelectionScreen(
                 Spacer(modifier = Modifier.height(32.dp))
                 
                 OutlinedButton(
-                    onClick = onManageProfiles,
+                    onClick = {
+                        android.util.Log.d("ProfileSelection", "Manage profiles clicked!")
+                        onManageProfiles()
+                    },
                     modifier = Modifier.padding(horizontal = 16.dp)
                 ) {
                     Icon(Icons.Default.Settings, contentDescription = null)

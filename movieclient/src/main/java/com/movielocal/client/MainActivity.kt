@@ -121,6 +121,7 @@ fun MovieApp(
                 viewModel.clearDiscoveredServer()
             }
         )
+        return
     }
     
     if (showConnectionDialog) {
@@ -143,28 +144,37 @@ fun MovieApp(
                 viewModel.discoverServer()
             }
         )
+        return
     }
     
-    if (showProfileSelection && !showConnectionDialog && !showServerFoundDialog && connectionState.serverUrl.isNotEmpty()) {
+    if (showProfileManagement) {
+        android.util.Log.d("MainActivity", "Showing ProfileManagementScreen")
+        ProfileManagementScreen(
+            onBack = {
+                android.util.Log.d("MainActivity", "ProfileManagement onBack called")
+                showProfileManagement = false
+                showProfileSelection = true
+            }
+        )
+        return
+    }
+    
+    if (showProfileSelection && connectionState.serverUrl.isNotEmpty()) {
+        android.util.Log.d("MainActivity", "Showing ProfileSelectionScreen")
         ProfileSelectionScreen(
             onProfileSelected = { profile ->
+                android.util.Log.d("MainActivity", "Profile selected: ${profile.name}")
                 profileManager.saveCurrentProfile(profile)
                 showProfileSelection = false
             },
             onManageProfiles = {
+                android.util.Log.d("MainActivity", "onManageProfiles called - switching to management screen")
                 showProfileManagement = true
+                showProfileSelection = false
             }
         )
-    } else if (showProfileManagement && !showConnectionDialog && !showServerFoundDialog && connectionState.serverUrl.isNotEmpty()) {
-        ProfileManagementScreen(
-            onBack = {
-                showProfileManagement = false
-                if (!profileManager.hasProfile()) {
-                    showProfileSelection = true
-                }
-            }
-        )
-    } else {
+        return
+    }
     
     Scaffold(
         bottomBar = {
@@ -225,6 +235,5 @@ fun MovieApp(
                 )
             }
         }
-    }
     }
 }
