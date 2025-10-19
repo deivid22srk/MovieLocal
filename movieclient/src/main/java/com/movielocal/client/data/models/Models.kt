@@ -129,3 +129,14 @@ data class VideoProgress(
     @SerializedName("completed")
     val completed: Boolean = false
 )
+
+data class Profile(
+    @SerializedName("id")
+    val id: String,
+
+    @SerializedName("name")
+    val name: String,
+
+    @SerializedName("avatarUrl")
+    val avatarUrl: String? = null
+)

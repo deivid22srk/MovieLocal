@@ -170,7 +170,7 @@ fun MovieApp(
                     }
                 )
                 "profile" -> ProfileScreen(
-                    serverUrl = connectionState.serverUrl,
+                    viewModel = viewModel,
                     onOpenSettings = { showConnectionDialog = true }
                 )
                 "detail" -> com.movielocal.client.ui.screens.DetailScreen(

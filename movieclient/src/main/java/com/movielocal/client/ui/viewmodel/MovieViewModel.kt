@@ -7,11 +7,14 @@ import com.movielocal.client.data.api.ServerDiscovery
 import com.movielocal.client.data.models.Movie
 import com.movielocal.client.data.models.Series
 import com.movielocal.client.data.repository.MovieRepository
+import com.movielocal.client.data.repository.ProfileRepository
 import com.movielocal.client.data.ClientManager
+import com.movielocal.client.data.models.Profile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 sealed class UiState {
     data object Initial : UiState()
@@ -27,11 +30,17 @@ data class ConnectionState(
     val isDiscovering: Boolean = false
 )
 
+data class ProfileState(
+    val profiles: List<Profile> = emptyList(),
+    val selectedProfile: Profile? = null
+)
+
 class MovieViewModel(application: Application) : AndroidViewModel(application) {
-    
+
     private val repository = MovieRepository()
+    private val profileRepository = ProfileRepository(application)
     private val serverDiscovery = ServerDiscovery(application)
-    private val clientManager = ClientManager(application, repository)
+    private val clientManager = ClientManager(application, repository, profileRepository)
     private val prefs = application.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
     
     private val _uiState = MutableStateFlow<UiState>(UiState.Initial)
@@ -39,9 +48,42 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _connectionState = MutableStateFlow(ConnectionState())
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+
+    private val _profileState = MutableStateFlow(ProfileState())
+    val profileState: StateFlow<ProfileState> = _profileState.asStateFlow()
     
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    init {
+        loadProfiles()
+    }
+
+    private fun loadProfiles() {
+        viewModelScope.launch {
+            val result = profileRepository.getProfiles()
+            if (result.isSuccess) {
+                val profiles = result.getOrNull() ?: emptyList()
+                val selectedProfile = profileRepository.getSelectedProfile()
+                _profileState.value = ProfileState(profiles, selectedProfile)
+            }
+        }
+    }
+
+    fun createProfile(name: String) {
+        viewModelScope.launch {
+            val newProfile = Profile(id = UUID.randomUUID().toString(), name = name)
+            val result = profileRepository.createProfile(newProfile)
+            if (result.isSuccess) {
+                loadProfiles()
+            }
+        }
+    }
+
+    fun selectProfile(profile: Profile) {
+        profileRepository.saveSelectedProfile(profile)
+        _profileState.value = _profileState.value.copy(selectedProfile = profile)
+    }
     
     fun setServerUrl(url: String) {
         val formattedUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -51,6 +93,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         repository.setServerUrl(formattedUrl)
+        profileRepository.setServerUrl(formattedUrl)
         prefs.edit().putString("server_url", formattedUrl).apply()
         _connectionState.value = ConnectionState(serverUrl = formattedUrl)
         checkConnection()

@@ -7,11 +7,13 @@ import com.google.gson.Gson
 import com.movielocal.server.data.MediaDatabase
 import com.movielocal.server.data.MediaType
 import com.movielocal.server.data.ProgressDatabase
+import com.movielocal.server.data.ProfileDatabase
 import com.movielocal.server.data.VideoProgress
 import com.movielocal.server.data.ConnectedClientsManager
 import com.movielocal.server.models.ContentResponse
 import com.movielocal.server.models.Episode
 import com.movielocal.server.models.Movie
+import com.movielocal.server.models.Profile
 import com.movielocal.server.models.Season
 import com.movielocal.server.models.Series
 import fi.iki.elonen.NanoHTTPD
@@ -27,6 +29,7 @@ class MovieServer(
     private val gson = Gson()
     private val database = MediaDatabase(context)
     private val progressDatabase = ProgressDatabase(context)
+    private val profileDatabase = ProfileDatabase(context)
     private val clientsManager = ConnectedClientsManager(context)
     private val moviesDir: File
     private val seriesDir: File
@@ -120,6 +123,8 @@ class MovieServer(
                 val videoId = uri.removePrefix("/api/progress/")
                 saveProgress(session, videoId)
             }
+            uri == "/api/profiles" && method == Method.GET -> getProfiles()
+            uri == "/api/profiles" && method == Method.POST -> createProfile(session)
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
         }
         
@@ -574,6 +579,41 @@ class MovieServer(
                 Response.Status.OK,
                 "application/json",
                 gson.toJson(mapOf("status" to "completed"))
+            )
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                gson.toJson(mapOf("error" to e.message))
+            )
+        }
+    }
+
+    private fun getProfiles(): Response {
+        val profiles = profileDatabase.getProfiles()
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            gson.toJson(profiles)
+        )
+    }
+
+    private fun createProfile(session: IHTTPSession): Response {
+        return try {
+            val bodyMap = mutableMapOf<String, String>()
+            session.parseBody(bodyMap)
+            val body = bodyMap["postData"] ?: ""
+            
+            val profile = gson.fromJson(body, Profile::class.java)
+            
+            val profiles = profileDatabase.getProfiles().toMutableList()
+            profiles.add(profile)
+            profileDatabase.saveProfiles(profiles)
+            
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                gson.toJson(mapOf("status" to "created"))
             )
         } catch (e: Exception) {
             newFixedLengthResponse(

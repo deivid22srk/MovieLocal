@@ -107,3 +107,14 @@ data class ContentResponse(
     @SerializedName("series")
     val series: List<Series>
 )
+
+data class Profile(
+    @SerializedName("id")
+    val id: String,
+
+    @SerializedName("name")
+    val name: String,
+
+    @SerializedName("avatarUrl")
+    val avatarUrl: String? = null
+)
