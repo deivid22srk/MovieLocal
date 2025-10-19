@@ -1041,6 +1041,7 @@ fun AddEpisodeDialog(
         }
     )
     }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
