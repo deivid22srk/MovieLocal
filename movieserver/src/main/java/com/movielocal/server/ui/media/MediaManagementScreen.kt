@@ -1057,7 +1057,6 @@ fun EditMovieDialog(
     var genre by remember { mutableStateOf(item.genre) }
     var rating by remember { mutableStateOf(item.rating.toString()) }
     var description by remember { mutableStateOf(item.description) }
-    var duration by remember { mutableStateOf(item.filePath?.let { database.getVideoDurationFromFile(java.io.File(it)) }?.toString() ?: "0") }
     var coverUri by remember { mutableStateOf<Uri?>(item.coverPath?.let { Uri.parse("file://$it") }) }
     
     val imagePicker = rememberLauncherForActivityResult(
@@ -1160,17 +1159,6 @@ fun EditMovieDialog(
                         onValueChange = { if (it.isEmpty() || it.toFloatOrNull() != null) rating = it },
                         label = { Text("Avaliação (0-10)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                }
-                
-                item {
-                    OutlinedTextField(
-                        value = duration,
-                        onValueChange = { if (it.isEmpty() || it.toIntOrNull() != null) duration = it },
-                        label = { Text("Duração (minutos)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
