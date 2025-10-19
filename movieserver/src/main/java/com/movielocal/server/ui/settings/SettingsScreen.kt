@@ -32,6 +32,9 @@ fun SettingsScreen(
     val database = remember { MediaDatabase(context) }
     val scope = rememberCoroutineScope()
     
+    val prefs = remember { context.getSharedPreferences("server_settings", android.content.Context.MODE_PRIVATE) }
+    var autoStartEnabled by remember { mutableStateOf(prefs.getBoolean("auto_start_on_boot", false)) }
+    
     var selectedAccount by remember { mutableStateOf<String?>(null) }
     var showBackupDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
@@ -114,6 +117,42 @@ fun SettingsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item {
+                Text(
+                    text = "Servidor",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+            
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    ListItem(
+                        headlineContent = { Text("Iniciar automaticamente") },
+                        supportingContent = { Text("Iniciar servidor ao ligar o dispositivo") },
+                        leadingContent = {
+                            Icon(Icons.Default.Power, null)
+                        },
+                        trailingContent = {
+                            Switch(
+                                checked = autoStartEnabled,
+                                onCheckedChange = { enabled ->
+                                    autoStartEnabled = enabled
+                                    prefs.edit().putBoolean("auto_start_on_boot", enabled).apply()
+                                    statusMessage = if (enabled) {
+                                        "Inicialização automática ativada"
+                                    } else {
+                                        "Inicialização automática desativada"
+                                    }
+                                }
+                            )
+                        }
+                    )
+                }
+            }
+            
             item {
                 Text(
                     text = "Conta Google",
