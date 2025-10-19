@@ -83,15 +83,18 @@ fun MovieApp(
     var showConnectionDialog by remember { mutableStateOf(connectionState.serverUrl.isEmpty()) }
     var showServerFoundDialog by remember { mutableStateOf(false) }
     var currentScreen by remember { mutableStateOf("home") }
-    var showProfileSelection by remember { mutableStateOf(!profileManager.hasProfile()) }
+    var showProfileSelection by remember { mutableStateOf(false) }
     var showProfileManagement by remember { mutableStateOf(false) }
     var selectedMovie by remember { mutableStateOf<com.movielocal.client.data.models.Movie?>(null) }
     var selectedSeries by remember { mutableStateOf<com.movielocal.client.data.models.Series?>(null) }
     
-    LaunchedEffect(Unit) {
+    LaunchedEffect(connectionState.serverUrl) {
         if (connectionState.serverUrl.isEmpty()) {
             showConnectionDialog = true
+            showProfileSelection = false
             viewModel.discoverServer()
+        } else if (!profileManager.hasProfile() && !showConnectionDialog) {
+            showProfileSelection = true
         }
     }
     
@@ -109,6 +112,9 @@ fun MovieApp(
                 showServerFoundDialog = false
                 showConnectionDialog = false
                 viewModel.clearDiscoveredServer()
+                if (!profileManager.hasProfile()) {
+                    showProfileSelection = true
+                }
             },
             onDecline = {
                 showServerFoundDialog = false
@@ -124,6 +130,9 @@ fun MovieApp(
             onSetServerUrl = { url ->
                 viewModel.setServerUrl(url)
                 showConnectionDialog = false
+                if (!profileManager.hasProfile()) {
+                    showProfileSelection = true
+                }
             },
             onDismiss = {
                 if (connectionState.serverUrl.isNotEmpty()) {
@@ -136,7 +145,7 @@ fun MovieApp(
         )
     }
     
-    if (showProfileSelection) {
+    if (showProfileSelection && !showConnectionDialog && !showServerFoundDialog && connectionState.serverUrl.isNotEmpty()) {
         ProfileSelectionScreen(
             onProfileSelected = { profile ->
                 profileManager.saveCurrentProfile(profile)
@@ -146,7 +155,7 @@ fun MovieApp(
                 showProfileManagement = true
             }
         )
-    } else if (showProfileManagement) {
+    } else if (showProfileManagement && !showConnectionDialog && !showServerFoundDialog && connectionState.serverUrl.isNotEmpty()) {
         ProfileManagementScreen(
             onBack = {
                 showProfileManagement = false

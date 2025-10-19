@@ -47,7 +47,8 @@ fun ProfileManagementScreen(
         scope.launch {
             try {
                 if (serverUrl.isNotEmpty()) {
-                    val api = RetrofitClient.getMovieApi("http://$serverUrl")
+                    val baseUrl = if (serverUrl.startsWith("http")) serverUrl else "http://$serverUrl"
+                    val api = RetrofitClient.getMovieApi(baseUrl)
                     val response = api.getProfiles()
                     if (response.isSuccessful && response.body() != null) {
                         profiles = response.body()!!.profiles
@@ -124,7 +125,8 @@ fun ProfileManagementScreen(
                 scope.launch {
                     try {
                         if (serverUrl.isNotEmpty()) {
-                            val api = RetrofitClient.getMovieApi("http://$serverUrl")
+                            val baseUrl = if (serverUrl.startsWith("http")) serverUrl else "http://$serverUrl"
+                            val api = RetrofitClient.getMovieApi(baseUrl)
                             val response = api.createProfile(profile)
                             if (response.isSuccessful) {
                                 loadProfiles()
@@ -147,7 +149,8 @@ fun ProfileManagementScreen(
                 scope.launch {
                     try {
                         if (serverUrl.isNotEmpty()) {
-                            val api = RetrofitClient.getMovieApi("http://$serverUrl")
+                            val baseUrl = if (serverUrl.startsWith("http")) serverUrl else "http://$serverUrl"
+                            val api = RetrofitClient.getMovieApi(baseUrl)
                             val response = api.updateProfile(profile.id, profile)
                             if (response.isSuccessful) {
                                 loadProfiles()
@@ -173,7 +176,8 @@ fun ProfileManagementScreen(
                         scope.launch {
                             try {
                                 if (serverUrl.isNotEmpty()) {
-                                    val api = RetrofitClient.getMovieApi("http://$serverUrl")
+                                    val baseUrl = if (serverUrl.startsWith("http")) serverUrl else "http://$serverUrl"
+                                    val api = RetrofitClient.getMovieApi(baseUrl)
                                     val response = api.deleteProfile(selectedProfile!!.id)
                                     if (response.isSuccessful) {
                                         loadProfiles()

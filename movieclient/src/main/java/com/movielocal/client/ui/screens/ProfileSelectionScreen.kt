@@ -47,7 +47,8 @@ fun ProfileSelectionScreen(
         scope.launch {
             try {
                 if (serverUrl.isNotEmpty()) {
-                    val api = RetrofitClient.getMovieApi("http://$serverUrl")
+                    val baseUrl = if (serverUrl.startsWith("http")) serverUrl else "http://$serverUrl"
+                    val api = RetrofitClient.getMovieApi(baseUrl)
                     val response = api.getProfiles()
                     if (response.isSuccessful && response.body() != null) {
                         profiles = response.body()!!.profiles
@@ -58,7 +59,8 @@ fun ProfileSelectionScreen(
                     errorMessage = "Servidor não conectado"
                 }
             } catch (e: Exception) {
-                errorMessage = e.message
+                errorMessage = "Erro: ${e.message}"
+                e.printStackTrace()
             } finally {
                 isLoading = false
             }
