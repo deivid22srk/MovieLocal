@@ -122,6 +122,26 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         _connectionState.value = _connectionState.value.copy(discoveredServerIp = null)
     }
     
+    suspend fun getChannels(): Result<List<com.movielocal.client.data.models.Channel>> {
+        return repository.getChannels()
+    }
+    
+    suspend fun getChannel(channelId: String): Result<com.movielocal.client.data.models.Channel> {
+        return repository.getChannel(channelId)
+    }
+    
+    suspend fun getChannelState(channelId: String): Result<com.movielocal.client.data.models.ChannelState> {
+        return repository.getChannelState(channelId)
+    }
+    
+    suspend fun startChannel(channelId: String): Result<Unit> {
+        return repository.startChannel(channelId)
+    }
+    
+    suspend fun stopChannel(channelId: String): Result<Unit> {
+        return repository.stopChannel(channelId)
+    }
+    
     override fun onCleared() {
         super.onCleared()
         clientManager.stopHeartbeat()

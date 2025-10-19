@@ -37,7 +37,7 @@ fun ChannelsScreen(
     
     LaunchedEffect(Unit) {
         isLoading = true
-        viewModel.repository.getChannels().fold(
+        viewModel.getChannels().fold(
             onSuccess = { 
                 channels = it
                 isLoading = false
